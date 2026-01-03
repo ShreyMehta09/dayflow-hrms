@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
 	Card,
 	CardHeader,
@@ -11,9 +11,15 @@ import {
 	AvatarGroup,
 	Button,
 	Progress,
+	SkeletonStats,
+	SkeletonCard,
+	SkeletonText,
+	EmptyState,
+	InlineError,
 } from "@/components/ui";
 import { useAuth, RoleGuard } from "@/context/AuthContext";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
+import { useReducedMotion, useAriaAnnounce } from "@/lib/hooks";
 import {
 	Users,
 	UserCheck,
@@ -31,7 +37,9 @@ import {
 	Coffee,
 	Cake,
 	ChevronRight,
+	RefreshCw,
 } from "lucide-react";
+import { dashboardApi, type DashboardStats } from "@/services/api";
 
 // Mock data
 const statsData = {
@@ -275,6 +283,41 @@ const quickActions = [
 export default function DashboardPage() {
 	const { user, role } = useAuth();
 	const stats = role ? statsData[role] : statsData.employee;
+	const prefersReducedMotion = useReducedMotion();
+	const announce = useAriaAnnounce();
+
+	// Loading states
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<Error | null>(null);
+	const [dashboardData, setDashboardData] = useState<DashboardStats | null>(
+		null
+	);
+
+	// Fetch dashboard data
+	const fetchDashboard = async () => {
+		setIsLoading(true);
+		setError(null);
+		try {
+			const data = await dashboardApi.getStats();
+			setDashboardData(data);
+			announce("Dashboard loaded successfully");
+		} catch (err) {
+			setError(
+				err instanceof Error ? err : new Error("Failed to load dashboard")
+			);
+			announce("Failed to load dashboard", "assertive");
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		fetchDashboard();
+	}, [announce]);
+
+	const handleRefresh = () => {
+		fetchDashboard();
+	};
 
 	const getColorClasses = (color: string) => {
 		const colors: Record<string, { bg: string; text: string }> = {
@@ -294,8 +337,71 @@ export default function DashboardPage() {
 		return "Good Evening";
 	};
 
+	// Animation class based on reduced motion preference
+	const animationClass = prefersReducedMotion ? "" : "animate-fade-in";
+	const staggerClass = (index: number) =>
+		prefersReducedMotion ? "" : `stagger-${Math.min(index + 1, 6)}`;
+
+	// Error state
+	if (error) {
+		return (
+			<div className="flex items-center justify-center min-h-[60vh]">
+				<InlineError
+					message={error.message}
+					onRetry={() => {
+						setError(null);
+						setIsLoading(true);
+						setTimeout(() => setIsLoading(false), 600);
+					}}
+				/>
+			</div>
+		);
+	}
+
+	// Loading state
+	if (isLoading) {
+		return (
+			<div
+				className="space-y-6"
+				aria-label="Loading dashboard"
+				aria-busy="true"
+			>
+				{/* Header skeleton */}
+				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+					<div>
+						<div className="h-8 w-64 bg-surface rounded-lg animate-shimmer" />
+						<div className="h-5 w-80 bg-surface rounded-lg mt-2 animate-shimmer" />
+					</div>
+					<div className="flex items-center gap-3">
+						<div className="h-10 w-32 bg-surface rounded-lg animate-shimmer" />
+						<div className="h-10 w-24 bg-surface rounded-lg animate-shimmer" />
+					</div>
+				</div>
+
+				{/* Stats skeleton */}
+				<SkeletonStats count={4} />
+
+				{/* Content skeleton */}
+				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+					<div className="lg:col-span-2 space-y-6">
+						<SkeletonCard className="h-64" />
+						<SkeletonCard className="h-80" />
+					</div>
+					<div className="space-y-6">
+						<SkeletonCard className="h-64" />
+						<SkeletonCard className="h-56" />
+					</div>
+				</div>
+			</div>
+		);
+	}
+
 	return (
-		<div className="space-y-6 animate-fade-in">
+		<div
+			className={cn("space-y-6", animationClass)}
+			role="main"
+			aria-label="Dashboard"
+		>
 			{/* Header */}
 			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div>
@@ -307,6 +413,15 @@ export default function DashboardPage() {
 					</p>
 				</div>
 				<div className="flex items-center gap-3">
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={handleRefresh}
+						aria-label="Refresh dashboard"
+						className="focus-ring"
+					>
+						<RefreshCw className="w-4 h-4" />
+					</Button>
 					<RoleGuard allowedRoles={["admin", "hr"]}>
 						<Button variant="outline" leftIcon={<Plus className="w-4 h-4" />}>
 							Add Employee
@@ -319,18 +434,31 @@ export default function DashboardPage() {
 			</div>
 
 			{/* Stats Grid */}
-			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+			<div
+				className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+				role="region"
+				aria-label="Key statistics"
+			>
 				{stats.map((stat, index) => {
 					const colors = getColorClasses(stat.color);
 					return (
 						<Card
 							key={index}
-							className="hover-lift cursor-pointer"
+							className={cn(
+								"hover-lift cursor-pointer focus-ring",
+								staggerClass(index),
+								animationClass
+							)}
 							padding="md"
+							tabIndex={0}
+							role="article"
+							aria-label={`${stat.label}: ${stat.value}`}
 						>
 							<div className="flex items-start justify-between">
 								<div className={cn("p-2.5 rounded-xl", colors.bg)}>
-									<span className={colors.text}>{stat.icon}</span>
+									<span className={colors.text} aria-hidden="true">
+										{stat.icon}
+									</span>
 								</div>
 								{stat.trend !== "neutral" && (
 									<div
@@ -338,11 +466,12 @@ export default function DashboardPage() {
 											"flex items-center gap-1 text-xs font-medium",
 											stat.trend === "up" ? "text-success" : "text-error"
 										)}
+										aria-label={`Trend ${stat.trend}, ${stat.change}`}
 									>
 										{stat.trend === "up" ? (
-											<TrendingUp className="w-3 h-3" />
+											<TrendingUp className="w-3 h-3" aria-hidden="true" />
 										) : (
-											<TrendingDown className="w-3 h-3" />
+											<TrendingDown className="w-3 h-3" aria-hidden="true" />
 										)}
 										{stat.change}
 									</div>

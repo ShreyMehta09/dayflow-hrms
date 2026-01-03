@@ -2,9 +2,9 @@
 
 import React, { useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
+import { useAuth } from "@/context/AuthContext";
 import {
 	Building2,
 	Upload,
@@ -16,10 +16,11 @@ import {
 	EyeOff,
 	X,
 	Image as ImageIcon,
+	AlertCircle,
 } from "lucide-react";
 
 export default function SignUpPage() {
-	const router = useRouter();
+	const { signup } = useAuth();
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const [formData, setFormData] = useState({
@@ -37,6 +38,7 @@ export default function SignUpPage() {
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
+	const [apiError, setApiError] = useState<string | null>(null);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const { name, value } = e.target;
@@ -44,6 +46,9 @@ export default function SignUpPage() {
 		// Clear error when user starts typing
 		if (errors[name]) {
 			setErrors((prev) => ({ ...prev, [name]: "" }));
+		}
+		if (apiError) {
+			setApiError(null);
 		}
 	};
 
@@ -121,12 +126,21 @@ export default function SignUpPage() {
 		if (!validateForm()) return;
 
 		setIsLoading(true);
+		setApiError(null);
 
-		// Simulate API call
-		await new Promise((resolve) => setTimeout(resolve, 1500));
+		const result = await signup({
+			name: formData.name,
+			email: formData.email,
+			password: formData.password,
+			department: formData.companyName,
+			phone: formData.phone,
+		});
 
-		// On success, redirect to sign-in
-		router.push("/auth/sign-in");
+		if (!result.success) {
+			setApiError(result.error || "Registration failed. Please try again.");
+		}
+
+		setIsLoading(false);
 	};
 
 	return (
@@ -220,6 +234,14 @@ export default function SignUpPage() {
 
 					{/* Form */}
 					<form onSubmit={handleSubmit} className="space-y-5">
+						{/* API Error */}
+						{apiError && (
+							<div className="flex items-center gap-2 p-3 rounded-lg bg-error/10 border border-error/30 text-error text-sm">
+								<AlertCircle className="w-4 h-4 flex-shrink-0" />
+								<span>{apiError}</span>
+							</div>
+						)}
+
 						{/* Company Name */}
 						<Input
 							name="companyName"

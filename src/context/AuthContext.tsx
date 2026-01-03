@@ -7,110 +7,181 @@ import React, {
 	useCallback,
 	useEffect,
 } from "react";
-import type { User, UserRole } from "@/types";
+import { useRouter, usePathname } from "next/navigation";
+
+// Types
+export type UserRole = "admin" | "hr" | "employee";
+export type UserStatus = "active" | "inactive" | "on_leave";
+
+export interface User {
+	id: string;
+	email: string;
+	name: string;
+	role: UserRole;
+	avatar?: string;
+	department?: string;
+	position?: string;
+	joinDate?: string;
+	phone?: string;
+	status: UserStatus;
+}
 
 interface AuthContextType {
 	user: User | null;
 	isLoading: boolean;
 	isAuthenticated: boolean;
 	role: UserRole | null;
-	login: (email: string, password: string) => Promise<void>;
-	logout: () => void;
-	switchRole: (role: UserRole) => void;
+	login: (
+		email: string,
+		password: string
+	) => Promise<{ success: boolean; error?: string }>;
+	signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
+	logout: () => Promise<void>;
+	refreshUser: () => Promise<void>;
 	hasPermission: (allowedRoles: UserRole[]) => boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface SignupData {
+	name: string;
+	email: string;
+	password: string;
+	department?: string;
+	position?: string;
+	phone?: string;
+}
 
-// Mock users for demo
-const MOCK_USERS: Record<UserRole, User> = {
-	admin: {
-		id: "admin-1",
-		email: "admin@dayflow.com",
-		name: "Alex Thompson",
-		role: "admin",
-		avatar:
-			"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face",
-		department: "Management",
-		position: "System Administrator",
-		joinDate: "2022-01-15",
-		phone: "+1 (555) 123-4567",
-		status: "active",
-	},
-	hr: {
-		id: "hr-1",
-		email: "hr@dayflow.com",
-		name: "Sarah Johnson",
-		role: "hr",
-		avatar:
-			"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-		department: "Human Resources",
-		position: "HR Manager",
-		joinDate: "2022-03-10",
-		phone: "+1 (555) 234-5678",
-		status: "active",
-	},
-	employee: {
-		id: "emp-1",
-		email: "employee@dayflow.com",
-		name: "Michael Chen",
-		role: "employee",
-		avatar:
-			"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-		department: "Engineering",
-		position: "Senior Developer",
-		joinDate: "2023-06-01",
-		phone: "+1 (555) 345-6789",
-		status: "active",
-	},
-};
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 	children,
 }) => {
 	const [user, setUser] = useState<User | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const router = useRouter();
+	const pathname = usePathname();
+
+	// Check session on mount
+	const checkSession = useCallback(async () => {
+		try {
+			const response = await fetch("/api/auth/me", {
+				method: "GET",
+				credentials: "include",
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				if (data.user) {
+					setUser(data.user);
+				} else {
+					setUser(null);
+				}
+			} else {
+				setUser(null);
+			}
+		} catch (error) {
+			console.error("Session check failed:", error);
+			setUser(null);
+		} finally {
+			setIsLoading(false);
+		}
+	}, []);
 
 	useEffect(() => {
-		// Simulate loading user from storage
-		const storedRole = localStorage.getItem("dayflow_role") as UserRole | null;
-		if (storedRole && MOCK_USERS[storedRole]) {
-			setUser(MOCK_USERS[storedRole]);
-		} else {
-			// Default to employee for demo
-			setUser(MOCK_USERS.employee);
-			localStorage.setItem("dayflow_role", "employee");
+		checkSession();
+	}, [checkSession]);
+
+	// Redirect if not authenticated (except on auth pages)
+	useEffect(() => {
+		if (!isLoading && !user) {
+			const authPages = ["/auth/sign-in", "/auth/sign-up"];
+			if (!authPages.includes(pathname)) {
+				// Middleware handles redirection
+			}
 		}
-		setIsLoading(false);
-	}, []);
+	}, [isLoading, user, pathname]);
 
-	const login = useCallback(async (email: string, _password: string) => {
-		setIsLoading(true);
-		// Simulate API call
-		await new Promise((resolve) => setTimeout(resolve, 1000));
+	const login = useCallback(
+		async (
+			email: string,
+			password: string
+		): Promise<{ success: boolean; error?: string }> => {
+			setIsLoading(true);
+			try {
+				const response = await fetch("/api/auth/login", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ email, password }),
+					credentials: "include",
+				});
 
-		// Find user by email (mock)
-		const foundUser = Object.values(MOCK_USERS).find((u) => u.email === email);
-		if (foundUser) {
-			setUser(foundUser);
-			localStorage.setItem("dayflow_role", foundUser.role);
-		} else {
-			// Default to employee
-			setUser(MOCK_USERS.employee);
-			localStorage.setItem("dayflow_role", "employee");
+				const data = await response.json();
+
+				if (response.ok && data.user) {
+					setUser(data.user);
+					router.push("/dashboard");
+					return { success: true };
+				} else {
+					return { success: false, error: data.error || "Login failed" };
+				}
+			} catch (error) {
+				console.error("Login error:", error);
+				return { success: false, error: "Network error. Please try again." };
+			} finally {
+				setIsLoading(false);
+			}
+		},
+		[router]
+	);
+
+	const signup = useCallback(
+		async (data: SignupData): Promise<{ success: boolean; error?: string }> => {
+			setIsLoading(true);
+			try {
+				const response = await fetch("/api/auth/signup", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(data),
+				});
+
+				const result = await response.json();
+
+				if (response.ok) {
+					// Auto login after signup
+					return await login(data.email, data.password);
+				} else {
+					return { success: false, error: result.error || "Signup failed" };
+				}
+			} catch (error) {
+				console.error("Signup error:", error);
+				return { success: false, error: "Network error. Please try again." };
+			} finally {
+				setIsLoading(false);
+			}
+		},
+		[login]
+	);
+
+	const logout = useCallback(async () => {
+		try {
+			await fetch("/api/auth/logout", {
+				method: "POST",
+				credentials: "include",
+			});
+		} catch (error) {
+			console.error("Logout error:", error);
+		} finally {
+			setUser(null);
+			router.push("/auth/sign-in");
 		}
-		setIsLoading(false);
-	}, []);
+	}, [router]);
 
-	const logout = useCallback(() => {
-		setUser(null);
-		localStorage.removeItem("dayflow_role");
-	}, []);
-
-	const switchRole = useCallback((role: UserRole) => {
-		setUser(MOCK_USERS[role]);
-		localStorage.setItem("dayflow_role", role);
-	}, []);
+	const refreshUser = useCallback(async () => {
+		await checkSession();
+	}, [checkSession]);
 
 	const hasPermission = useCallback(
 		(allowedRoles: UserRole[]) => {
@@ -128,8 +199,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				isAuthenticated: !!user,
 				role: user?.role || null,
 				login,
+				signup,
 				logout,
-				switchRole,
+				refreshUser,
 				hasPermission,
 			}}
 		>

@@ -1,9 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Button, Avatar, Modal } from "@/components/ui";
+import {
+	Card,
+	Button,
+	Avatar,
+	Modal,
+	SkeletonEmployeeCard,
+	NoEmployeesFound,
+	NoSearchResults,
+	InlineError,
+} from "@/components/ui";
 import { useAuth, RoleGuard } from "@/context/AuthContext";
+import { useReducedMotion, useAriaAnnounce } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 import {
 	Plus,
 	Search,
@@ -16,110 +27,25 @@ import {
 	Calendar,
 	Edit,
 	Shield,
+	RefreshCw,
 } from "lucide-react";
 
 // Status types
 type EmployeeStatus = "present" | "absent" | "on_leave";
 
-// Mock employee data
-const employees = [
-	{
-		id: "1",
-		name: "Sarah Johnson",
-		email: "sarah.johnson@company.com",
-		phone: "+1 (555) 234-5678",
-		department: "Human Resources",
-		position: "HR Manager",
-		status: "present" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2022-03-10",
-	},
-	{
-		id: "2",
-		name: "Michael Chen",
-		email: "michael.chen@company.com",
-		phone: "+1 (555) 345-6789",
-		department: "Engineering",
-		position: "Senior Developer",
-		status: "present" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2023-06-01",
-	},
-	{
-		id: "3",
-		name: "Emily Watson",
-		email: "emily.watson@company.com",
-		phone: "+1 (555) 456-7890",
-		department: "Marketing",
-		position: "Marketing Lead",
-		status: "on_leave" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2023-01-15",
-	},
-	{
-		id: "4",
-		name: "David Kim",
-		email: "david.kim@company.com",
-		phone: "+1 (555) 567-8901",
-		department: "Engineering",
-		position: "Backend Developer",
-		status: "absent" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2023-09-01",
-	},
-	{
-		id: "5",
-		name: "Lisa Chen",
-		email: "lisa.chen@company.com",
-		phone: "+1 (555) 678-9012",
-		department: "Design",
-		position: "UI/UX Designer",
-		status: "present" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2023-04-20",
-	},
-	{
-		id: "6",
-		name: "James Wilson",
-		email: "james.wilson@company.com",
-		phone: "+1 (555) 789-0123",
-		department: "Sales",
-		position: "Sales Manager",
-		status: "present" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2022-08-15",
-	},
-	{
-		id: "7",
-		name: "Amanda Foster",
-		email: "amanda.foster@company.com",
-		phone: "+1 (555) 890-1234",
-		department: "Engineering",
-		position: "Frontend Developer",
-		status: "on_leave" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2023-11-01",
-	},
-	{
-		id: "8",
-		name: "Robert Taylor",
-		email: "robert.taylor@company.com",
-		phone: "+1 (555) 901-2345",
-		department: "Finance",
-		position: "Financial Analyst",
-		status: "present" as EmployeeStatus,
-		avatar:
-			"https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop&crop=face",
-		joinDate: "2023-02-20",
-	},
-];
+// Employee interface
+interface Employee {
+	id: string;
+	name: string;
+	email: string;
+	phone?: string;
+	department?: string;
+	position?: string;
+	status: EmployeeStatus;
+	avatar?: string;
+	joinDate?: string;
+	role?: string;
+}
 
 // Status indicator component (positioned at top-right corner)
 const StatusIndicator = ({ status }: { status: EmployeeStatus }) => {
@@ -143,7 +69,7 @@ const StatusIndicator = ({ status }: { status: EmployeeStatus }) => {
 
 // Employee Card Component
 interface EmployeeCardProps {
-	employee: (typeof employees)[0];
+	employee: Employee;
 	onClick: () => void;
 }
 
@@ -182,7 +108,7 @@ const EmployeeCard = ({ employee, onClick }: EmployeeCardProps) => {
 
 // Employee Profile Modal
 interface EmployeeProfileModalProps {
-	employee: (typeof employees)[0] | null;
+	employee: Employee | null;
 	isOpen: boolean;
 	onClose: () => void;
 	canEdit: boolean;
@@ -341,13 +267,46 @@ const EmployeeProfileModal = ({
 
 export default function EmployeesPage() {
 	const { role } = useAuth();
+	const [employees, setEmployees] = useState<Employee[]>([]);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedEmployee, setSelectedEmployee] = useState<
-		(typeof employees)[0] | null
-	>(null);
+	const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
+		null
+	);
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<Error | null>(null);
+
+	const prefersReducedMotion = useReducedMotion();
+	const announce = useAriaAnnounce();
 
 	const canEdit = role === "admin" || role === "hr";
+
+	// Fetch employees from API
+	const fetchEmployees = async () => {
+		setIsLoading(true);
+		setError(null);
+		try {
+			const response = await fetch("/api/employees", {
+				credentials: "include",
+			});
+			if (!response.ok) {
+				throw new Error("Failed to fetch employees");
+			}
+			const data = await response.json();
+			setEmployees(data.employees || []);
+			announce(`${data.employees?.length || 0} employees loaded`);
+		} catch (err) {
+			setError(
+				err instanceof Error ? err : new Error("Failed to load employees")
+			);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		fetchEmployees();
+	}, [announce]);
 
 	// Filter employees based on search
 	const filteredEmployees = employees.filter(
@@ -357,9 +316,10 @@ export default function EmployeesPage() {
 			emp.department.toLowerCase().includes(searchQuery.toLowerCase())
 	);
 
-	const handleCardClick = (employee: (typeof employees)[0]) => {
+	const handleCardClick = (employee: Employee) => {
 		setSelectedEmployee(employee);
 		setIsModalOpen(true);
+		announce(`Viewing profile of ${employee.name}`);
 	};
 
 	const handleCloseModal = () => {
@@ -367,8 +327,30 @@ export default function EmployeesPage() {
 		setSelectedEmployee(null);
 	};
 
+	const handleRefresh = () => {
+		fetchEmployees();
+	};
+
+	// Animation classes
+	const animationClass = prefersReducedMotion ? "" : "animate-fade-in";
+	const staggerClass = (index: number) =>
+		prefersReducedMotion ? "" : `stagger-${Math.min((index % 6) + 1, 6)}`;
+
+	// Error state
+	if (error) {
+		return (
+			<div className="flex items-center justify-center min-h-[60vh]">
+				<InlineError message={error.message} onRetry={handleRefresh} />
+			</div>
+		);
+	}
+
 	return (
-		<div className="space-y-6 animate-fade-in">
+		<div
+			className={cn("space-y-6", animationClass)}
+			role="main"
+			aria-label="Employees directory"
+		>
 			{/* Header */}
 			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div>
@@ -377,61 +359,124 @@ export default function EmployeesPage() {
 						Manage your organization&apos;s workforce
 					</p>
 				</div>
-				<RoleGuard allowedRoles={["admin", "hr"]}>
-					<Button variant="primary" leftIcon={<Plus className="w-4 h-4" />}>
-						Add Employee
+				<div className="flex items-center gap-3">
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={handleRefresh}
+						aria-label="Refresh employee list"
+						className="focus-ring"
+						disabled={isLoading}
+					>
+						<RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
 					</Button>
-				</RoleGuard>
+					<RoleGuard allowedRoles={["admin", "hr"]}>
+						<Button variant="primary" leftIcon={<Plus className="w-4 h-4" />}>
+							Add Employee
+						</Button>
+					</RoleGuard>
+				</div>
 			</div>
 
 			{/* Search Bar */}
 			<div className="relative max-w-md">
-				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+				<Search
+					className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"
+					aria-hidden="true"
+				/>
 				<input
-					type="text"
+					type="search"
 					placeholder="Search employees..."
 					value={searchQuery}
 					onChange={(e) => setSearchQuery(e.target.value)}
-					className="w-full h-10 pl-10 pr-4 bg-card border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+					className="w-full h-10 pl-10 pr-4 bg-card border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus-ring"
+					aria-label="Search employees by name, position, or department"
+					disabled={isLoading}
 				/>
 			</div>
 
 			{/* Status Legend */}
-			<div className="flex flex-wrap items-center gap-6 px-1 py-2 text-sm">
+			<div
+				className="flex flex-wrap items-center gap-6 px-1 py-2 text-sm"
+				role="legend"
+				aria-label="Employee status legend"
+			>
 				<div className="flex items-center gap-2">
-					<span className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow" />
+					<span
+						className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow"
+						aria-hidden="true"
+					/>
 					<span className="text-text-muted font-medium">Present</span>
 				</div>
 				<div className="flex items-center gap-2">
-					<span className="w-3 h-3 bg-yellow-500 rounded-full border-2 border-white shadow" />
+					<span
+						className="w-3 h-3 bg-yellow-500 rounded-full border-2 border-white shadow"
+						aria-hidden="true"
+					/>
 					<span className="text-text-muted font-medium">Absent</span>
 				</div>
 				<div className="flex items-center gap-2">
-					<div className="p-1 bg-blue-500/20 rounded-full border border-blue-500/30">
+					<div
+						className="p-1 bg-blue-500/20 rounded-full border border-blue-500/30"
+						aria-hidden="true"
+					>
 						<Plane className="w-3 h-3 text-blue-500" />
 					</div>
 					<span className="text-text-muted font-medium">On Leave</span>
 				</div>
 			</div>
 
-			{/* Employee Grid */}
-			<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-				{filteredEmployees.map((employee) => (
-					<EmployeeCard
-						key={employee.id}
-						employee={employee}
-						onClick={() => handleCardClick(employee)}
-					/>
-				))}
-			</div>
-
-			{/* Empty State */}
-			{filteredEmployees.length === 0 && (
-				<div className="text-center py-12">
-					<p className="text-text-muted">
-						No employees found matching your search.
-					</p>
+			{/* Loading State */}
+			{isLoading && (
+				<div
+					className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4"
+					aria-label="Loading employees"
+					aria-busy="true"
+				>
+					{Array.from({ length: 12 }).map((_, index) => (
+						<SkeletonEmployeeCard key={index} />
+					))}
 				</div>
+			)}
+
+			{/* Employee Grid */}
+			{!isLoading && filteredEmployees.length > 0 && (
+				<div
+					className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4"
+					role="list"
+					aria-label={`${filteredEmployees.length} employees`}
+				>
+					{filteredEmployees.map((employee, index) => (
+						<div
+							key={employee.id}
+							className={cn(animationClass, staggerClass(index))}
+							role="listitem"
+						>
+							<EmployeeCard
+								employee={employee}
+								onClick={() => handleCardClick(employee)}
+							/>
+						</div>
+					))}
+				</div>
+			)}
+
+			{/* Empty State - No Results from Search */}
+			{!isLoading && filteredEmployees.length === 0 && searchQuery && (
+				<NoSearchResults
+					title="No employees found"
+					description={`No employees match "${searchQuery}". Try a different search term.`}
+					actionLabel="Clear Search"
+					onAction={() => setSearchQuery("")}
+				/>
+			)}
+
+			{/* Empty State - No Employees at All */}
+			{!isLoading && employees.length === 0 && !searchQuery && (
+				<NoEmployeesFound
+					actionLabel={canEdit ? "Add First Employee" : undefined}
+					onAction={canEdit ? () => {} : undefined}
+				/>
 			)}
 
 			{/* Employee Profile Modal */}

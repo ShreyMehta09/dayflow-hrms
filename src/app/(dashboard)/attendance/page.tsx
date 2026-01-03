@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
 	Card,
 	CardHeader,
@@ -9,8 +9,15 @@ import {
 	Button,
 	Badge,
 	Avatar,
+	SkeletonTable,
+	SkeletonStats,
+	NoAttendanceRecords,
+	NoSearchResults,
+	InlineError,
 } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
+import { useReducedMotion, useAriaAnnounce } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 import {
 	Clock,
 	Calendar,
@@ -22,7 +29,9 @@ import {
 	Check,
 	Search,
 	Users,
+	RefreshCw,
 } from "lucide-react";
+import { attendanceApi } from "@/services/api";
 
 // Mock employee list
 const employees = [
@@ -135,9 +144,7 @@ const generateDailyAttendance = (date: Date) => {
 				)}m`,
 				extraHours:
 					extraHours > 0
-						? `${Math.floor(extraHours)}h ${Math.round(
-								(extraHours % 1) * 60
-						  )}m`
+						? `${Math.floor(extraHours)}h ${Math.round((extraHours % 1) * 60)}m`
 						: "--",
 				status: "present",
 			};
@@ -217,77 +224,7 @@ const generateAttendanceData = (year: number, month: number) => {
 				)}m`,
 				extraHours:
 					extraHours > 0
-						? `${Math.floor(extraHours)}h ${Math.round(
-								(extraHours % 1) * 60
-						  )}m`
-						: "--",
-				status: "present",
-			});
-		}
-	}
-
-	return data.reverse(); // Most recent first
-};
-
-		if (isLeave) {
-			data.push({
-				date: date.toISOString().split("T")[0],
-				dateDisplay: date.toLocaleDateString("en-US", {
-					day: "numeric",
-					month: "short",
-				}),
-				checkIn: null,
-				checkOut: null,
-				workHours: "--",
-				extraHours: "--",
-				status: "leave",
-			});
-		} else if (isAbsent) {
-			data.push({
-				date: date.toISOString().split("T")[0],
-				dateDisplay: date.toLocaleDateString("en-US", {
-					day: "numeric",
-					month: "short",
-				}),
-				checkIn: null,
-				checkOut: null,
-				workHours: "--",
-				extraHours: "--",
-				status: "absent",
-			});
-		} else {
-			const checkInHour = 8 + Math.floor(Math.random() * 2); // 8-9 AM
-			const checkInMinute = Math.floor(Math.random() * 60);
-			const workMinutes = 480 + Math.floor(Math.random() * 120); // 8-10 hours
-			const checkOutMinutes = checkInHour * 60 + checkInMinute + workMinutes;
-
-			const checkOutHour = Math.floor(checkOutMinutes / 60);
-			const checkOutMinute = checkOutMinutes % 60;
-
-			const standardHours = 8;
-			const actualHours = workMinutes / 60;
-			const extraHours = Math.max(0, actualHours - standardHours);
-
-			data.push({
-				date: date.toISOString().split("T")[0],
-				dateDisplay: date.toLocaleDateString("en-US", {
-					day: "numeric",
-					month: "short",
-				}),
-				checkIn: `${checkInHour.toString().padStart(2, "0")}:${checkInMinute
-					.toString()
-					.padStart(2, "0")}`,
-				checkOut: `${checkOutHour.toString().padStart(2, "0")}:${checkOutMinute
-					.toString()
-					.padStart(2, "0")}`,
-				workHours: `${Math.floor(actualHours)}h ${Math.round(
-					(actualHours % 1) * 60
-				)}m`,
-				extraHours:
-					extraHours > 0
-						? `${Math.floor(extraHours)}h ${Math.round(
-								(extraHours % 1) * 60
-						  )}m`
+						? `${Math.floor(extraHours)}h ${Math.round((extraHours % 1) * 60)}m`
 						: "--",
 				status: "present",
 			});
@@ -307,8 +244,84 @@ export default function AttendancePage() {
 	const [dateDisplayMode, setDateDisplayMode] = useState<"date" | "day">(
 		"date"
 	);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<Error | null>(null);
+
+	const prefersReducedMotion = useReducedMotion();
+	const announce = useAriaAnnounce();
 
 	const isAdminOrHR = role === "admin" || role === "hr";
+
+	// Animation classes
+	const animationClass = prefersReducedMotion ? "" : "animate-fade-in";
+
+	// Fetch today's attendance status on mount
+	useEffect(() => {
+		const fetchTodayAttendance = async () => {
+			try {
+				const data = await attendanceApi.getToday();
+				if (data.today) {
+					if (data.today.checkIn) {
+						const time = new Date(data.today.checkIn).toLocaleTimeString(
+							"en-US",
+							{
+								hour: "2-digit",
+								minute: "2-digit",
+								hour12: false,
+							}
+						);
+						setTodayCheckIn(time);
+					}
+					if (data.today.checkOut) {
+						const time = new Date(data.today.checkOut).toLocaleTimeString(
+							"en-US",
+							{
+								hour: "2-digit",
+								minute: "2-digit",
+								hour12: false,
+							}
+						);
+						setTodayCheckOut(time);
+					}
+					setIsCheckedIn(data.isCheckedIn && !data.isCheckedOut);
+				}
+			} catch (err) {
+				console.error("Failed to fetch today's attendance:", err);
+			}
+		};
+		fetchTodayAttendance();
+	}, []);
+
+	// Load attendance data
+	useEffect(() => {
+		const loadAttendance = async () => {
+			setIsLoading(true);
+			setError(null);
+			try {
+				// For admin/HR, fetch attendance for selected date
+				// For now, we still use mock data for the table view
+				await new Promise((resolve) => setTimeout(resolve, 300));
+				announce("Attendance records loaded");
+			} catch (err) {
+				setError(
+					err instanceof Error ? err : new Error("Failed to load attendance")
+				);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		loadAttendance();
+	}, [selectedDate, announce]);
+
+	const handleRefresh = () => {
+		setIsLoading(true);
+		setError(null);
+		setTimeout(() => {
+			setIsLoading(false);
+			announce("Attendance records refreshed");
+		}, 500);
+	};
 
 	// For Admin/HR view - single day navigation
 	const handlePreviousDay = () => {
@@ -345,33 +358,54 @@ export default function AttendancePage() {
 		}
 	};
 
-	const handleCheckIn = () => {
-		const now = new Date();
-		const time = now.toLocaleTimeString("en-US", {
-			hour: "2-digit",
-			minute: "2-digit",
-			hour12: false,
-		});
-		setTodayCheckIn(time);
-		setIsCheckedIn(true);
+	const handleCheckIn = async () => {
+		try {
+			const result = await attendanceApi.checkIn();
+			if (result.attendance.checkIn) {
+				const time = new Date(result.attendance.checkIn).toLocaleTimeString(
+					"en-US",
+					{
+						hour: "2-digit",
+						minute: "2-digit",
+						hour12: false,
+					}
+				);
+				setTodayCheckIn(time);
+				setIsCheckedIn(true);
+				announce("Checked in successfully");
+			}
+		} catch (err) {
+			console.error("Check-in failed:", err);
+			announce("Failed to check in");
+		}
 	};
 
-	const handleCheckOut = () => {
-		const now = new Date();
-		const time = now.toLocaleTimeString("en-US", {
-			hour: "2-digit",
-			minute: "2-digit",
-			hour12: false,
-		});
-		setTodayCheckOut(time);
-		setIsCheckedIn(false);
+	const handleCheckOut = async () => {
+		try {
+			const result = await attendanceApi.checkOut();
+			if (result.attendance.checkOut) {
+				const time = new Date(result.attendance.checkOut).toLocaleTimeString(
+					"en-US",
+					{
+						hour: "2-digit",
+						minute: "2-digit",
+						hour12: false,
+					}
+				);
+				setTodayCheckOut(time);
+				setIsCheckedIn(false);
+				announce("Checked out successfully");
+			}
+		} catch (err) {
+			console.error("Check-out failed:", err);
+			announce("Failed to check out");
+		}
 	};
 
 	const isCurrentMonth =
 		year === new Date().getFullYear() && month === new Date().getMonth();
 
-	const isToday =
-		selectedDate.toDateString() === new Date().toDateString();
+	const isToday = selectedDate.toDateString() === new Date().toDateString();
 
 	// Get appropriate data based on role
 	const dailyAttendance = isAdminOrHR
@@ -392,9 +426,7 @@ export default function AttendancePage() {
 	const presentCount = dailyAttendance.filter(
 		(r) => r.status === "present"
 	).length;
-	const leaveCount = dailyAttendance.filter(
-		(r) => r.status === "leave"
-	).length;
+	const leaveCount = dailyAttendance.filter((r) => r.status === "leave").length;
 	const absentCount = dailyAttendance.filter(
 		(r) => r.status === "absent"
 	).length;
@@ -423,8 +455,21 @@ export default function AttendancePage() {
 
 	// Admin/HR View
 	if (isAdminOrHR) {
+		// Error state
+		if (error) {
+			return (
+				<div className="flex items-center justify-center min-h-[60vh]">
+					<InlineError message={error.message} onRetry={handleRefresh} />
+				</div>
+			);
+		}
+
 		return (
-			<div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+			<div
+				className={cn("space-y-6 max-w-7xl mx-auto", animationClass)}
+				role="main"
+				aria-label="Attendance management"
+			>
 				{/* Header */}
 				<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 					<div>
@@ -435,25 +480,44 @@ export default function AttendancePage() {
 							Monitor and manage employee attendance
 						</p>
 					</div>
-					<Button
-						variant="outline"
-						leftIcon={<Download className="w-4 h-4" />}
-					>
-						Export Report
-					</Button>
+					<div className="flex items-center gap-3">
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={handleRefresh}
+							aria-label="Refresh attendance"
+							className="focus-ring"
+							disabled={isLoading}
+						>
+							<RefreshCw
+								className={cn("w-4 h-4", isLoading && "animate-spin")}
+							/>
+						</Button>
+						<Button
+							variant="outline"
+							leftIcon={<Download className="w-4 h-4" />}
+						>
+							Export Report
+						</Button>
+					</div>
 				</div>
 
 				{/* Search and Date Navigation */}
 				<div className="flex flex-col lg:flex-row gap-4">
 					{/* Search Bar */}
 					<div className="relative flex-1">
-						<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+						<Search
+							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"
+							aria-hidden="true"
+						/>
 						<input
-							type="text"
+							type="search"
 							placeholder="Search employees by name or department..."
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
-							className="w-full h-11 pl-10 pr-4 bg-card border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+							className="w-full h-11 pl-10 pr-4 bg-card border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus-ring"
+							aria-label="Search employees"
+							disabled={isLoading}
 						/>
 					</div>
 
@@ -592,111 +656,135 @@ export default function AttendancePage() {
 						</div>
 					</CardHeader>
 
-					<div className="overflow-x-auto">
-						<table className="w-full">
-							<thead>
-								<tr className="border-y border-border bg-surface/50">
-									<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-										Employee
-									</th>
-									<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-										Check In
-									</th>
-									<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-										Check Out
-									</th>
-									<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-										Work Hours
-									</th>
-									<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-										Extra Hours
-									</th>
-									<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-										Status
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{filteredAttendance.map((record) => (
-									<tr
-										key={record.id}
-										className="border-b border-border last:border-0 hover:bg-surface/30 transition-colors"
-									>
-										<td className="px-6 py-4">
-											<div className="flex items-center gap-3">
-												<Avatar
-													src={record.avatar}
-													name={record.name}
-													size="sm"
-												/>
-												<div>
-													<p className="font-medium text-text-primary">
-														{record.name}
-													</p>
-													<p className="text-xs text-text-muted">
-														{record.department}
-													</p>
-												</div>
-											</div>
-										</td>
-										<td className="px-6 py-4">
-											<span className="text-text-primary font-medium">
-												{record.checkIn || (
-													<span className="text-text-muted">--</span>
-												)}
-											</span>
-										</td>
-										<td className="px-6 py-4">
-											<span className="text-text-primary font-medium">
-												{record.checkOut || (
-													<span className="text-text-muted">--</span>
-												)}
-											</span>
-										</td>
-										<td className="px-6 py-4">
-											<span className="font-semibold text-text-primary">
-												{record.workHours}
-											</span>
-										</td>
-										<td className="px-6 py-4">
-											<span
-												className={
-													record.extraHours !== "--"
-														? "font-semibold text-success"
-														: "text-text-muted"
-												}
-											>
-												{record.extraHours}
-											</span>
-										</td>
-										<td className="px-6 py-4">
-											{record.status === "present" && (
-												<Badge variant="success" size="sm">
-													Present
-												</Badge>
-											)}
-											{record.status === "leave" && (
-												<Badge variant="warning" size="sm">
-													On Leave
-												</Badge>
-											)}
-											{record.status === "absent" && (
-												<Badge variant="error" size="sm">
-													Absent
-												</Badge>
-											)}
-										</td>
+					{isLoading ? (
+						<div
+							className="p-6"
+							aria-label="Loading attendance records"
+							aria-busy="true"
+						>
+							<SkeletonTable rows={6} columns={6} />
+						</div>
+					) : (
+						<div className="overflow-x-auto">
+							<table
+								className="w-full"
+								role="table"
+								aria-label="Employee attendance"
+							>
+								<thead>
+									<tr className="border-y border-border bg-surface/50">
+										<th
+											scope="col"
+											className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+										>
+											Employee
+										</th>
+										<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
+											Check In
+										</th>
+										<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
+											Check Out
+										</th>
+										<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
+											Work Hours
+										</th>
+										<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
+											Extra Hours
+										</th>
+										<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
+											Status
+										</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+								</thead>
+								<tbody>
+									{filteredAttendance.map((record) => (
+										<tr
+											key={record.id}
+											className="border-b border-border last:border-0 hover:bg-surface/30 transition-colors"
+										>
+											<td className="px-6 py-4">
+												<div className="flex items-center gap-3">
+													<Avatar
+														src={record.avatar}
+														name={record.name}
+														size="sm"
+													/>
+													<div>
+														<p className="font-medium text-text-primary">
+															{record.name}
+														</p>
+														<p className="text-xs text-text-muted">
+															{record.department}
+														</p>
+													</div>
+												</div>
+											</td>
+											<td className="px-6 py-4">
+												<span className="text-text-primary font-medium">
+													{record.checkIn || (
+														<span className="text-text-muted">--</span>
+													)}
+												</span>
+											</td>
+											<td className="px-6 py-4">
+												<span className="text-text-primary font-medium">
+													{record.checkOut || (
+														<span className="text-text-muted">--</span>
+													)}
+												</span>
+											</td>
+											<td className="px-6 py-4">
+												<span className="font-semibold text-text-primary">
+													{record.workHours}
+												</span>
+											</td>
+											<td className="px-6 py-4">
+												<span
+													className={
+														record.extraHours !== "--"
+															? "font-semibold text-success"
+															: "text-text-muted"
+													}
+												>
+													{record.extraHours}
+												</span>
+											</td>
+											<td className="px-6 py-4">
+												{record.status === "present" && (
+													<Badge variant="success" size="sm">
+														Present
+													</Badge>
+												)}
+												{record.status === "leave" && (
+													<Badge variant="warning" size="sm">
+														On Leave
+													</Badge>
+												)}
+												{record.status === "absent" && (
+													<Badge variant="error" size="sm">
+														Absent
+													</Badge>
+												)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 
-					{filteredAttendance.length === 0 && (
-						<div className="text-center py-12">
-							<p className="text-text-muted">
-								No employees found matching your search.
-							</p>
+					{!isLoading && filteredAttendance.length === 0 && searchQuery && (
+						<div className="py-8">
+							<NoSearchResults
+								query={searchQuery}
+								onClear={() => setSearchQuery("")}
+							/>
+						</div>
+					)}
+
+					{!isLoading && dailyAttendance.length === 0 && !searchQuery && (
+						<div className="py-8">
+							<NoAttendanceRecords />
 						</div>
 					)}
 				</Card>
@@ -725,9 +813,22 @@ export default function AttendancePage() {
 		);
 	}
 
-	// Employee View (existing code)
+	// Employee View
+	// Error state
+	if (error) {
+		return (
+			<div className="flex items-center justify-center min-h-[60vh]">
+				<InlineError message={error.message} onRetry={handleRefresh} />
+			</div>
+		);
+	}
+
 	return (
-		<div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+		<div
+			className={cn("space-y-6 max-w-7xl mx-auto", animationClass)}
+			role="main"
+			aria-label="My attendance"
+		>
 			{/* Header with Check-In/Out */}
 			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 				<div>
@@ -742,12 +843,31 @@ export default function AttendancePage() {
 				{/* Check-In/Out Buttons - Only show for current month */}
 				{isCurrentMonth && (
 					<div className="flex items-center gap-3">
+						{/* Refresh Button */}
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={handleRefresh}
+							aria-label="Refresh attendance"
+							className="focus-ring"
+							disabled={isLoading}
+						>
+							<RefreshCw
+								className={cn("w-4 h-4", isLoading && "animate-spin")}
+							/>
+						</Button>
+
 						{/* Status Indicator */}
-						<div className="flex items-center gap-2 px-4 py-2 bg-surface rounded-lg border border-border">
+						<div
+							className="flex items-center gap-2 px-4 py-2 bg-surface rounded-lg border border-border"
+							role="status"
+							aria-live="polite"
+						>
 							<div
 								className={`w-3 h-3 rounded-full transition-colors ${
 									isCheckedIn ? "bg-green-500" : "bg-red-500"
 								}`}
+								aria-hidden="true"
 							/>
 							<span className="text-sm font-medium text-text-primary">
 								{isCheckedIn ? "Checked In" : "Not Checked In"}
@@ -766,7 +886,7 @@ export default function AttendancePage() {
 
 						{todayCheckIn && !todayCheckOut && (
 							<Button
-								variant="error"
+								variant="danger"
 								leftIcon={<LogOut className="w-4 h-4" />}
 								onClick={handleCheckOut}
 							>
@@ -890,97 +1010,129 @@ export default function AttendancePage() {
 					</Button>
 				</CardHeader>
 
-				<div className="overflow-x-auto">
-					<table className="w-full">
-						<thead>
-							<tr className="border-y border-border bg-surface/50">
-								<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-									Date
-								</th>
-								<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-									Check In
-								</th>
-								<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-									Check Out
-								</th>
-								<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-									Work Hours
-								</th>
-								<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-									Extra Hours
-								</th>
-								<th className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4">
-									Status
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{monthlyAttendance.map((record, index) => (
-								<tr
-									key={index}
-									className="border-b border-border last:border-0 hover:bg-surface/30 transition-colors"
-								>
-									<td className="px-6 py-4">
-										<span className="font-medium text-text-primary">
-											{record.dateDisplay}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										<span className="text-text-primary">
-											{record.checkIn || (
-												<span className="text-text-muted">--</span>
-											)}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										<span className="text-text-primary">
-											{record.checkOut || (
-												<span className="text-text-muted">--</span>
-											)}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										<span className="font-medium text-text-primary">
-											{record.workHours}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										<span
-											className={
-												record.extraHours !== "--"
-													? "font-medium text-success"
-													: "text-text-muted"
-											}
-										>
-											{record.extraHours}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										{record.status === "present" && (
-											<Badge variant="success" size="sm">
-												Present
-											</Badge>
-										)}
-										{record.status === "leave" && (
-											<Badge variant="warning" size="sm">
-												On Leave
-											</Badge>
-										)}
-										{record.status === "absent" && (
-											<Badge variant="error" size="sm">
-												Absent
-											</Badge>
-										)}
-									</td>
+				{isLoading ? (
+					<div
+						className="p-6"
+						aria-label="Loading attendance records"
+						aria-busy="true"
+					>
+						<SkeletonTable rows={8} columns={6} />
+					</div>
+				) : (
+					<div className="overflow-x-auto">
+						<table
+							className="w-full"
+							role="table"
+							aria-label="Monthly attendance records"
+						>
+							<thead>
+								<tr className="border-y border-border bg-surface/50">
+									<th
+										scope="col"
+										className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+									>
+										Date
+									</th>
+									<th
+										scope="col"
+										className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+									>
+										Check In
+									</th>
+									<th
+										scope="col"
+										className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+									>
+										Check Out
+									</th>
+									<th
+										scope="col"
+										className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+									>
+										Work Hours
+									</th>
+									<th
+										scope="col"
+										className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+									>
+										Extra Hours
+									</th>
+									<th
+										scope="col"
+										className="text-left text-xs font-semibold text-text-muted uppercase tracking-wider px-6 py-4"
+									>
+										Status
+									</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
+							</thead>
+							<tbody>
+								{monthlyAttendance.map((record, index) => (
+									<tr
+										key={index}
+										className="border-b border-border last:border-0 hover:bg-surface/30 transition-colors"
+									>
+										<td className="px-6 py-4">
+											<span className="font-medium text-text-primary">
+												{record.dateDisplay}
+											</span>
+										</td>
+										<td className="px-6 py-4">
+											<span className="text-text-primary">
+												{record.checkIn || (
+													<span className="text-text-muted">--</span>
+												)}
+											</span>
+										</td>
+										<td className="px-6 py-4">
+											<span className="text-text-primary">
+												{record.checkOut || (
+													<span className="text-text-muted">--</span>
+												)}
+											</span>
+										</td>
+										<td className="px-6 py-4">
+											<span className="font-medium text-text-primary">
+												{record.workHours}
+											</span>
+										</td>
+										<td className="px-6 py-4">
+											<span
+												className={
+													record.extraHours !== "--"
+														? "font-medium text-success"
+														: "text-text-muted"
+												}
+											>
+												{record.extraHours}
+											</span>
+										</td>
+										<td className="px-6 py-4">
+											{record.status === "present" && (
+												<Badge variant="success" size="sm">
+													Present
+												</Badge>
+											)}
+											{record.status === "leave" && (
+												<Badge variant="warning" size="sm">
+													On Leave
+												</Badge>
+											)}
+											{record.status === "absent" && (
+												<Badge variant="error" size="sm">
+													Absent
+												</Badge>
+											)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
 
-				{monthlyAttendance.length === 0 && (
-					<div className="text-center py-12">
-						<p className="text-text-muted">No attendance records found.</p>
+				{!isLoading && monthlyAttendance.length === 0 && (
+					<div className="py-8">
+						<NoAttendanceRecords />
 					</div>
 				)}
 			</Card>

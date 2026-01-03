@@ -2,12 +2,12 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button, Input } from "@/components/ui";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 export default function SignInPage() {
-	const router = useRouter();
+	const { login } = useAuth();
 
 	const [formData, setFormData] = useState({
 		email: "",
@@ -17,12 +17,16 @@ export default function SignInPage() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
+	const [apiError, setApiError] = useState<string | null>(null);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const { name, value } = e.target;
 		setFormData((prev) => ({ ...prev, [name]: value }));
 		if (errors[name]) {
 			setErrors((prev) => ({ ...prev, [name]: "" }));
+		}
+		if (apiError) {
+			setApiError(null);
 		}
 	};
 
@@ -49,12 +53,15 @@ export default function SignInPage() {
 		if (!validateForm()) return;
 
 		setIsLoading(true);
+		setApiError(null);
 
-		// Simulate API call
-		await new Promise((resolve) => setTimeout(resolve, 1000));
+		const result = await login(formData.email, formData.password);
 
-		// On success, redirect to dashboard
-		router.push("/dashboard");
+		if (!result.success) {
+			setApiError(result.error || "Login failed. Please try again.");
+		}
+
+		setIsLoading(false);
 	};
 
 	return (
@@ -134,6 +141,14 @@ export default function SignInPage() {
 
 					{/* Form */}
 					<form onSubmit={handleSubmit} className="space-y-5">
+						{/* API Error */}
+						{apiError && (
+							<div className="flex items-center gap-2 p-3 rounded-lg bg-error/10 border border-error/30 text-error text-sm">
+								<AlertCircle className="w-4 h-4 flex-shrink-0" />
+								<span>{apiError}</span>
+							</div>
+						)}
+
 						{/* Email */}
 						<Input
 							name="email"
