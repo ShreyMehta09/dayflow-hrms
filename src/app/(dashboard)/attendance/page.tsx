@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
 	Card,
 	CardHeader,
@@ -10,7 +10,6 @@ import {
 	Badge,
 	Avatar,
 	SkeletonTable,
-	SkeletonStats,
 	NoAttendanceRecords,
 	NoSearchResults,
 	InlineError,
@@ -31,211 +30,51 @@ import {
 	Users,
 	RefreshCw,
 } from "lucide-react";
-import { attendanceApi } from "@/services/api";
+import { attendanceApi, type AttendanceRecord } from "@/services/api";
 
-// Mock employee list
-const employees = [
-	{
-		id: "1",
-		name: "Sarah Johnson",
-		avatar:
-			"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-		department: "Human Resources",
-	},
-	{
-		id: "2",
-		name: "Michael Chen",
-		avatar:
-			"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-		department: "Engineering",
-	},
-	{
-		id: "3",
-		name: "Emily Watson",
-		avatar:
-			"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face",
-		department: "Marketing",
-	},
-	{
-		id: "4",
-		name: "David Kim",
-		avatar:
-			"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face",
-		department: "Engineering",
-	},
-	{
-		id: "5",
-		name: "Lisa Chen",
-		avatar:
-			"https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face",
-		department: "Design",
-	},
-	{
-		id: "6",
-		name: "James Wilson",
-		avatar:
-			"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face",
-		department: "Sales",
-	},
-	{
-		id: "7",
-		name: "Amanda Foster",
-		avatar:
-			"https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop&crop=face",
-		department: "Engineering",
-	},
-	{
-		id: "8",
-		name: "Robert Taylor",
-		avatar:
-			"https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop&crop=face",
-		department: "Finance",
-	},
-];
+// Types for display
+interface DailyAttendanceDisplay {
+	id: string;
+	name: string;
+	avatar?: string;
+	department?: string;
+	checkIn: string | null;
+	checkOut: string | null;
+	workHours: string;
+	extraHours: string;
+	status: string;
+}
 
-// Generate attendance for all employees for a specific date
-const generateDailyAttendance = (date: Date) => {
-	return employees.map((employee) => {
-		const random = Math.random();
-		const isLeave = random < 0.05; // 5% chance of leave
-		const isAbsent = !isLeave && random < 0.03; // 3% chance of absent
+interface MonthlyAttendanceDisplay {
+	date: string;
+	dateDisplay: string;
+	checkIn: string | null;
+	checkOut: string | null;
+	workHours: string;
+	extraHours: string;
+	status: string;
+}
 
-		if (isLeave) {
-			return {
-				...employee,
-				checkIn: null,
-				checkOut: null,
-				workHours: "--",
-				extraHours: "--",
-				status: "leave",
-			};
-		} else if (isAbsent) {
-			return {
-				...employee,
-				checkIn: null,
-				checkOut: null,
-				workHours: "--",
-				extraHours: "--",
-				status: "absent",
-			};
-		} else {
-			const checkInHour = 8 + Math.floor(Math.random() * 2); // 8-9 AM
-			const checkInMinute = Math.floor(Math.random() * 60);
-			const workMinutes = 480 + Math.floor(Math.random() * 120); // 8-10 hours
-			const checkOutMinutes = checkInHour * 60 + checkInMinute + workMinutes;
+// Helper function to format work hours
+const formatWorkHours = (hours: number): string => {
+	if (!hours || hours === 0) return "--";
+	const h = Math.floor(hours);
+	const m = Math.round((hours % 1) * 60);
+	return `${h}h ${m}m`;
+};
 
-			const checkOutHour = Math.floor(checkOutMinutes / 60);
-			const checkOutMinute = checkOutMinutes % 60;
-
-			const standardHours = 8;
-			const actualHours = workMinutes / 60;
-			const extraHours = Math.max(0, actualHours - standardHours);
-
-			return {
-				...employee,
-				checkIn: `${checkInHour.toString().padStart(2, "0")}:${checkInMinute
-					.toString()
-					.padStart(2, "0")}`,
-				checkOut: `${checkOutHour.toString().padStart(2, "0")}:${checkOutMinute
-					.toString()
-					.padStart(2, "0")}`,
-				workHours: `${Math.floor(actualHours)}h ${Math.round(
-					(actualHours % 1) * 60
-				)}m`,
-				extraHours:
-					extraHours > 0
-						? `${Math.floor(extraHours)}h ${Math.round((extraHours % 1) * 60)}m`
-						: "--",
-				status: "present",
-			};
-		}
+// Helper function to format time
+const formatTime = (dateString: string | undefined | null): string | null => {
+	if (!dateString) return null;
+	return new Date(dateString).toLocaleTimeString("en-US", {
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
 	});
 };
 
-// Mock attendance data for the selected month (for employee view)
-const generateAttendanceData = (year: number, month: number) => {
-	const daysInMonth = new Date(year, month + 1, 0).getDate();
-	const data = [];
-
-	for (let day = 1; day <= daysInMonth; day++) {
-		const date = new Date(year, month, day);
-		const dayOfWeek = date.getDay();
-
-		// Skip weekends
-		if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-
-		// Generate realistic data
-		const isLeave = Math.random() < 0.05; // 5% chance of leave
-		const isAbsent = !isLeave && Math.random() < 0.03; // 3% chance of absent
-
-		if (isLeave) {
-			data.push({
-				date: date.toISOString().split("T")[0],
-				dateDisplay: date.toLocaleDateString("en-US", {
-					day: "numeric",
-					month: "short",
-				}),
-				checkIn: null,
-				checkOut: null,
-				workHours: "--",
-				extraHours: "--",
-				status: "leave",
-			});
-		} else if (isAbsent) {
-			data.push({
-				date: date.toISOString().split("T")[0],
-				dateDisplay: date.toLocaleDateString("en-US", {
-					day: "numeric",
-					month: "short",
-				}),
-				checkIn: null,
-				checkOut: null,
-				workHours: "--",
-				extraHours: "--",
-				status: "absent",
-			});
-		} else {
-			const checkInHour = 8 + Math.floor(Math.random() * 2); // 8-9 AM
-			const checkInMinute = Math.floor(Math.random() * 60);
-			const workMinutes = 480 + Math.floor(Math.random() * 120); // 8-10 hours
-			const checkOutMinutes = checkInHour * 60 + checkInMinute + workMinutes;
-
-			const checkOutHour = Math.floor(checkOutMinutes / 60);
-			const checkOutMinute = checkOutMinutes % 60;
-
-			const standardHours = 8;
-			const actualHours = workMinutes / 60;
-			const extraHours = Math.max(0, actualHours - standardHours);
-
-			data.push({
-				date: date.toISOString().split("T")[0],
-				dateDisplay: date.toLocaleDateString("en-US", {
-					day: "numeric",
-					month: "short",
-				}),
-				checkIn: `${checkInHour.toString().padStart(2, "0")}:${checkInMinute
-					.toString()
-					.padStart(2, "0")}`,
-				checkOut: `${checkOutHour.toString().padStart(2, "0")}:${checkOutMinute
-					.toString()
-					.padStart(2, "0")}`,
-				workHours: `${Math.floor(actualHours)}h ${Math.round(
-					(actualHours % 1) * 60
-				)}m`,
-				extraHours:
-					extraHours > 0
-						? `${Math.floor(extraHours)}h ${Math.round((extraHours % 1) * 60)}m`
-						: "--",
-				status: "present",
-			});
-		}
-	}
-
-	return data.reverse(); // Most recent first
-};
-
 export default function AttendancePage() {
-	const { user, role } = useAuth();
+	const { role } = useAuth();
 	const [selectedDate, setSelectedDate] = useState(new Date());
 	const [isCheckedIn, setIsCheckedIn] = useState(false);
 	const [todayCheckIn, setTodayCheckIn] = useState<string | null>(null);
@@ -247,6 +86,14 @@ export default function AttendancePage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 
+	// Real attendance data from API
+	const [dailyAttendance, setDailyAttendance] = useState<
+		DailyAttendanceDisplay[]
+	>([]);
+	const [monthlyAttendance, setMonthlyAttendance] = useState<
+		MonthlyAttendanceDisplay[]
+	>([]);
+
 	const prefersReducedMotion = useReducedMotion();
 	const announce = useAriaAnnounce();
 
@@ -255,6 +102,16 @@ export default function AttendancePage() {
 	// Animation classes
 	const animationClass = prefersReducedMotion ? "" : "animate-fade-in";
 
+	// For Employee view - month navigation
+	const year = selectedDate.getFullYear();
+	const month = selectedDate.getMonth();
+	const monthName = selectedDate.toLocaleDateString("en-US", { month: "long" });
+
+	const isCurrentMonth =
+		year === new Date().getFullYear() && month === new Date().getMonth();
+
+	const isToday = selectedDate.toDateString() === new Date().toDateString();
+
 	// Fetch today's attendance status on mount
 	useEffect(() => {
 		const fetchTodayAttendance = async () => {
@@ -262,26 +119,10 @@ export default function AttendancePage() {
 				const data = await attendanceApi.getToday();
 				if (data.today) {
 					if (data.today.checkIn) {
-						const time = new Date(data.today.checkIn).toLocaleTimeString(
-							"en-US",
-							{
-								hour: "2-digit",
-								minute: "2-digit",
-								hour12: false,
-							}
-						);
-						setTodayCheckIn(time);
+						setTodayCheckIn(formatTime(data.today.checkIn));
 					}
 					if (data.today.checkOut) {
-						const time = new Date(data.today.checkOut).toLocaleTimeString(
-							"en-US",
-							{
-								hour: "2-digit",
-								minute: "2-digit",
-								hour12: false,
-							}
-						);
-						setTodayCheckOut(time);
+						setTodayCheckOut(formatTime(data.today.checkOut));
 					}
 					setIsCheckedIn(data.isCheckedIn && !data.isCheckedOut);
 				}
@@ -292,35 +133,80 @@ export default function AttendancePage() {
 		fetchTodayAttendance();
 	}, []);
 
-	// Load attendance data
-	useEffect(() => {
-		const loadAttendance = async () => {
-			setIsLoading(true);
-			setError(null);
-			try {
-				// For admin/HR, fetch attendance for selected date
-				// For now, we still use mock data for the table view
-				await new Promise((resolve) => setTimeout(resolve, 300));
-				announce("Attendance records loaded");
-			} catch (err) {
-				setError(
-					err instanceof Error ? err : new Error("Failed to load attendance")
-				);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		loadAttendance();
-	}, [selectedDate, announce]);
-
-	const handleRefresh = () => {
+	// Load attendance data from API
+	const loadAttendance = useCallback(async () => {
 		setIsLoading(true);
 		setError(null);
-		setTimeout(() => {
+		try {
+			if (isAdminOrHR) {
+				// Fetch attendance for selected date (all employees)
+				const dateStr = selectedDate.toISOString().split("T")[0];
+				const response = await attendanceApi.getAll({ date: dateStr });
+
+				// Transform API response to display format
+				const displayData: DailyAttendanceDisplay[] = (
+					response.attendance || []
+				).map((record: AttendanceRecord) => ({
+					id: record.id,
+					name: record.employee.name,
+					avatar: record.employee.avatar,
+					department: record.employee.department,
+					checkIn: formatTime(record.checkIn),
+					checkOut: formatTime(record.checkOut),
+					workHours: formatWorkHours(record.workHours),
+					extraHours: formatWorkHours(record.overtime),
+					status: record.status,
+				}));
+
+				setDailyAttendance(displayData);
+			} else {
+				// Fetch attendance for current user for the month
+				const startDate = new Date(year, month, 1).toISOString().split("T")[0];
+				const endDate = new Date(year, month + 1, 0)
+					.toISOString()
+					.split("T")[0];
+				const response = await attendanceApi.getAll({ startDate, endDate });
+
+				// Transform API response to display format
+				const displayData: MonthlyAttendanceDisplay[] = (
+					response.attendance || []
+				)
+					.map((record: AttendanceRecord) => {
+						const date = new Date(record.date);
+						return {
+							date: record.date,
+							dateDisplay: date.toLocaleDateString("en-US", {
+								day: "numeric",
+								month: "short",
+							}),
+							checkIn: formatTime(record.checkIn),
+							checkOut: formatTime(record.checkOut),
+							workHours: formatWorkHours(record.workHours),
+							extraHours: formatWorkHours(record.overtime),
+							status: record.status,
+						};
+					})
+					.reverse(); // Most recent first
+
+				setMonthlyAttendance(displayData);
+			}
+			announce("Attendance records loaded");
+		} catch (err) {
+			console.error("Failed to load attendance:", err);
+			setError(
+				err instanceof Error ? err : new Error("Failed to load attendance")
+			);
+		} finally {
 			setIsLoading(false);
-			announce("Attendance records refreshed");
-		}, 500);
+		}
+	}, [selectedDate, year, month, isAdminOrHR, announce]);
+
+	useEffect(() => {
+		loadAttendance();
+	}, [loadAttendance]);
+
+	const handleRefresh = () => {
+		loadAttendance();
 	};
 
 	// For Admin/HR view - single day navigation
@@ -341,11 +227,6 @@ export default function AttendancePage() {
 		}
 	};
 
-	// For Employee view - month navigation
-	const year = selectedDate.getFullYear();
-	const month = selectedDate.getMonth();
-	const monthName = selectedDate.toLocaleDateString("en-US", { month: "long" });
-
 	const handlePreviousMonth = () => {
 		setSelectedDate(new Date(year, month - 1, 1));
 	};
@@ -362,17 +243,10 @@ export default function AttendancePage() {
 		try {
 			const result = await attendanceApi.checkIn();
 			if (result.attendance.checkIn) {
-				const time = new Date(result.attendance.checkIn).toLocaleTimeString(
-					"en-US",
-					{
-						hour: "2-digit",
-						minute: "2-digit",
-						hour12: false,
-					}
-				);
-				setTodayCheckIn(time);
+				setTodayCheckIn(formatTime(result.attendance.checkIn));
 				setIsCheckedIn(true);
 				announce("Checked in successfully");
+				loadAttendance(); // Refresh the list
 			}
 		} catch (err) {
 			console.error("Check-in failed:", err);
@@ -384,17 +258,10 @@ export default function AttendancePage() {
 		try {
 			const result = await attendanceApi.checkOut();
 			if (result.attendance.checkOut) {
-				const time = new Date(result.attendance.checkOut).toLocaleTimeString(
-					"en-US",
-					{
-						hour: "2-digit",
-						minute: "2-digit",
-						hour12: false,
-					}
-				);
-				setTodayCheckOut(time);
+				setTodayCheckOut(formatTime(result.attendance.checkOut));
 				setIsCheckedIn(false);
 				announce("Checked out successfully");
+				loadAttendance(); // Refresh the list
 			}
 		} catch (err) {
 			console.error("Check-out failed:", err);
@@ -402,41 +269,32 @@ export default function AttendancePage() {
 		}
 	};
 
-	const isCurrentMonth =
-		year === new Date().getFullYear() && month === new Date().getMonth();
-
-	const isToday = selectedDate.toDateString() === new Date().toDateString();
-
-	// Get appropriate data based on role
-	const dailyAttendance = isAdminOrHR
-		? generateDailyAttendance(selectedDate)
-		: [];
-	const monthlyAttendance = !isAdminOrHR
-		? generateAttendanceData(year, month)
-		: [];
-
 	// Filter attendance for admin/HR search
 	const filteredAttendance = dailyAttendance.filter(
 		(record) =>
 			record.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			record.department.toLowerCase().includes(searchQuery.toLowerCase())
+			(record.department || "")
+				.toLowerCase()
+				.includes(searchQuery.toLowerCase())
 	);
 
 	// Calculate stats for admin/HR
 	const presentCount = dailyAttendance.filter(
-		(r) => r.status === "present"
+		(r) => r.status === "present" || r.status === "late"
 	).length;
-	const leaveCount = dailyAttendance.filter((r) => r.status === "leave").length;
+	const leaveCount = dailyAttendance.filter(
+		(r) => r.status === "on_leave"
+	).length;
 	const absentCount = dailyAttendance.filter(
 		(r) => r.status === "absent"
 	).length;
 
 	// Calculate stats for employee
 	const daysPresent = monthlyAttendance.filter(
-		(d) => d.status === "present"
+		(d) => d.status === "present" || d.status === "late"
 	).length;
 	const leavesCount = monthlyAttendance.filter(
-		(d) => d.status === "leave"
+		(d) => d.status === "on_leave"
 	).length;
 	const totalWorkingDays = monthlyAttendance.length;
 
@@ -450,6 +308,48 @@ export default function AttendancePage() {
 				day: "numeric",
 				year: "numeric",
 			});
+		}
+	};
+
+	// Status badge helper
+	const getStatusBadge = (status: string) => {
+		switch (status) {
+			case "present":
+				return (
+					<Badge variant="success" size="sm">
+						Present
+					</Badge>
+				);
+			case "late":
+				return (
+					<Badge variant="warning" size="sm">
+						Late
+					</Badge>
+				);
+			case "on_leave":
+				return (
+					<Badge variant="warning" size="sm">
+						On Leave
+					</Badge>
+				);
+			case "absent":
+				return (
+					<Badge variant="error" size="sm">
+						Absent
+					</Badge>
+				);
+			case "half_day":
+				return (
+					<Badge variant="secondary" size="sm">
+						Half Day
+					</Badge>
+				);
+			default:
+				return (
+					<Badge variant="secondary" size="sm">
+						{status}
+					</Badge>
+				);
 		}
 	};
 
@@ -587,9 +487,9 @@ export default function AttendancePage() {
 								</div>
 							</div>
 							<p className="text-3xl font-bold text-text-primary">
-								{employees.length}
+								{dailyAttendance.length}
 							</p>
-							<p className="text-sm text-text-muted mt-1">Total Employees</p>
+							<p className="text-sm text-text-muted mt-1">Total Records</p>
 						</CardContent>
 					</Card>
 
@@ -600,7 +500,10 @@ export default function AttendancePage() {
 									<Check className="w-5 h-5 text-success" />
 								</div>
 								<Badge variant="success" size="sm">
-									{((presentCount / employees.length) * 100).toFixed(0)}%
+									{dailyAttendance.length > 0
+										? ((presentCount / dailyAttendance.length) * 100).toFixed(0)
+										: 0}
+									%
 								</Badge>
 							</div>
 							<p className="text-3xl font-bold text-text-primary">
@@ -617,7 +520,10 @@ export default function AttendancePage() {
 									<Calendar className="w-5 h-5 text-warning" />
 								</div>
 								<Badge variant="warning" size="sm">
-									{((leaveCount / employees.length) * 100).toFixed(0)}%
+									{dailyAttendance.length > 0
+										? ((leaveCount / dailyAttendance.length) * 100).toFixed(0)
+										: 0}
+									%
 								</Badge>
 							</div>
 							<p className="text-3xl font-bold text-text-primary">
@@ -634,7 +540,10 @@ export default function AttendancePage() {
 									<Clock className="w-5 h-5 text-error" />
 								</div>
 								<Badge variant="error" size="sm">
-									{((absentCount / employees.length) * 100).toFixed(0)}%
+									{dailyAttendance.length > 0
+										? ((absentCount / dailyAttendance.length) * 100).toFixed(0)
+										: 0}
+									%
 								</Badge>
 							</div>
 							<p className="text-3xl font-bold text-text-primary">
@@ -651,7 +560,7 @@ export default function AttendancePage() {
 						<div className="flex items-center justify-between">
 							<CardTitle>Daily Attendance Records</CardTitle>
 							<Badge variant="secondary" size="sm">
-								{filteredAttendance.length} / {employees.length} employees
+								{filteredAttendance.length} records
 							</Badge>
 						</div>
 					</CardHeader>
@@ -714,7 +623,7 @@ export default function AttendancePage() {
 															{record.name}
 														</p>
 														<p className="text-xs text-text-muted">
-															{record.department}
+															{record.department || "N/A"}
 														</p>
 													</div>
 												</div>
@@ -750,21 +659,7 @@ export default function AttendancePage() {
 												</span>
 											</td>
 											<td className="px-6 py-4">
-												{record.status === "present" && (
-													<Badge variant="success" size="sm">
-														Present
-													</Badge>
-												)}
-												{record.status === "leave" && (
-													<Badge variant="warning" size="sm">
-														On Leave
-													</Badge>
-												)}
-												{record.status === "absent" && (
-													<Badge variant="error" size="sm">
-														Absent
-													</Badge>
-												)}
+												{getStatusBadge(record.status)}
 											</td>
 										</tr>
 									))}
@@ -950,7 +845,10 @@ export default function AttendancePage() {
 								<Check className="w-5 h-5 text-success" />
 							</div>
 							<Badge variant="success" size="sm">
-								{((daysPresent / totalWorkingDays) * 100).toFixed(0)}%
+								{totalWorkingDays > 0
+									? ((daysPresent / totalWorkingDays) * 100).toFixed(0)
+									: 0}
+								%
 							</Badge>
 						</div>
 						<p className="text-3xl font-bold text-text-primary">
@@ -968,7 +866,10 @@ export default function AttendancePage() {
 								<Calendar className="w-5 h-5 text-warning" />
 							</div>
 							<Badge variant="warning" size="sm">
-								{((leavesCount / totalWorkingDays) * 100).toFixed(0)}%
+								{totalWorkingDays > 0
+									? ((leavesCount / totalWorkingDays) * 100).toFixed(0)
+									: 0}
+								%
 							</Badge>
 						</div>
 						<p className="text-3xl font-bold text-text-primary">
@@ -992,7 +893,7 @@ export default function AttendancePage() {
 						<p className="text-3xl font-bold text-text-primary">
 							{totalWorkingDays}
 						</p>
-						<p className="text-sm text-text-muted mt-1">Total Working Days</p>
+						<p className="text-sm text-text-muted mt-1">Total Records</p>
 					</CardContent>
 				</Card>
 			</div>
@@ -1107,21 +1008,7 @@ export default function AttendancePage() {
 											</span>
 										</td>
 										<td className="px-6 py-4">
-											{record.status === "present" && (
-												<Badge variant="success" size="sm">
-													Present
-												</Badge>
-											)}
-											{record.status === "leave" && (
-												<Badge variant="warning" size="sm">
-													On Leave
-												</Badge>
-											)}
-											{record.status === "absent" && (
-												<Badge variant="error" size="sm">
-													Absent
-												</Badge>
-											)}
+											{getStatusBadge(record.status)}
 										</td>
 									</tr>
 								))}
