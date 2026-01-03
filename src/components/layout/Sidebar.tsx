@@ -47,6 +47,11 @@ const navigation: NavGroupType[] = [
 				icon: <LayoutDashboard className="w-5 h-5" />,
 			},
 			{
+				label: "Payroll",
+				href: "/payroll",
+				icon: <DollarSign className="w-5 h-5" />,
+			},
+			{
 				label: "Analytics",
 				href: "/analytics",
 				icon: <BarChart3 className="w-5 h-5" />,
