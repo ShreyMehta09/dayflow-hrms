@@ -69,6 +69,238 @@ interface EditEmployeeData {
 	status?: EmployeeStatus;
 }
 
+// Add Employee Data interface
+interface AddEmployeeData {
+	name: string;
+	email: string;
+	password: string;
+	phone?: string;
+	department?: string;
+	position?: string;
+	role?: UserRole;
+}
+
+// Add Employee Modal Component (Admin/HR only)
+interface AddEmployeeModalProps {
+	isOpen: boolean;
+	onClose: () => void;
+	onSave: (data: AddEmployeeData) => Promise<void>;
+}
+
+const AddEmployeeModal = ({
+	isOpen,
+	onClose,
+	onSave,
+}: AddEmployeeModalProps) => {
+	const [formData, setFormData] = useState<AddEmployeeData>({
+		name: "",
+		email: "",
+		password: "",
+		phone: "",
+		department: "",
+		position: "",
+		role: "employee",
+	});
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (isOpen) {
+			setFormData({
+				name: "",
+				email: "",
+				password: "",
+				phone: "",
+				department: "",
+				position: "",
+				role: "employee",
+			});
+			setError(null);
+		}
+	}, [isOpen]);
+
+	const handleInputChange = (
+		e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+	) => {
+		const { name, value } = e.target;
+		setFormData((prev) => ({ ...prev, [name]: value }));
+	};
+
+	const handleSelectChange = (name: string, value: string) => {
+		setFormData((prev) => ({ ...prev, [name]: value }));
+	};
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+
+		if (!formData.name || !formData.email || !formData.password) {
+			setError("Name, email, and password are required");
+			return;
+		}
+
+		if (formData.password.length < 6) {
+			setError("Password must be at least 6 characters");
+			return;
+		}
+
+		setIsLoading(true);
+		setError(null);
+
+		try {
+			await onSave(formData);
+			onClose();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to add employee");
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	return (
+		<Modal isOpen={isOpen} onClose={onClose} size="lg">
+			<div className="p-6 max-h-[90vh] overflow-y-auto">
+				<div className="flex items-start justify-between mb-6">
+					<div>
+						<h2 className="text-xl font-semibold text-text-primary">
+							Add New Employee
+						</h2>
+						<p className="text-sm text-text-muted mt-1">
+							Create a new employee account
+						</p>
+					</div>
+					<button
+						onClick={onClose}
+						className="p-1 text-text-muted hover:text-text-primary transition-colors"
+					>
+						<X className="w-5 h-5" />
+					</button>
+				</div>
+
+				{error && (
+					<div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-error/10 border border-error/30 text-error text-sm">
+						<AlertCircle className="w-4 h-4 flex-shrink-0" />
+						<span>{error}</span>
+					</div>
+				)}
+
+				<form onSubmit={handleSubmit} className="space-y-6">
+					{/* Account Information */}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2 mb-2">
+							<Shield className="w-4 h-4 text-primary" />
+							<span className="text-sm font-medium text-text-primary">
+								Account Information
+							</span>
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<Input
+								name="name"
+								label="Full Name *"
+								value={formData.name}
+								onChange={handleInputChange}
+								leftIcon={<User className="w-4 h-4" />}
+								placeholder="Enter full name"
+								fullWidth
+								required
+							/>
+							<Input
+								name="email"
+								label="Email Address *"
+								type="email"
+								value={formData.email}
+								onChange={handleInputChange}
+								leftIcon={<Mail className="w-4 h-4" />}
+								placeholder="employee@company.com"
+								fullWidth
+								required
+							/>
+							<Input
+								name="password"
+								label="Password *"
+								type="password"
+								value={formData.password}
+								onChange={handleInputChange}
+								leftIcon={<Shield className="w-4 h-4" />}
+								placeholder="Min 6 characters"
+								fullWidth
+								required
+							/>
+							<Input
+								name="phone"
+								label="Phone Number"
+								value={formData.phone}
+								onChange={handleInputChange}
+								leftIcon={<Phone className="w-4 h-4" />}
+								placeholder="Enter phone number"
+								fullWidth
+							/>
+						</div>
+					</div>
+
+					{/* Work Information */}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2 mb-2">
+							<Briefcase className="w-4 h-4 text-secondary" />
+							<span className="text-sm font-medium text-text-primary">
+								Work Information
+							</span>
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<Input
+								name="department"
+								label="Department"
+								value={formData.department}
+								onChange={handleInputChange}
+								leftIcon={<Building2 className="w-4 h-4" />}
+								placeholder="e.g., Engineering"
+								fullWidth
+							/>
+							<Input
+								name="position"
+								label="Position"
+								value={formData.position}
+								onChange={handleInputChange}
+								leftIcon={<Briefcase className="w-4 h-4" />}
+								placeholder="e.g., Software Engineer"
+								fullWidth
+							/>
+							<div>
+								<label className="block text-sm font-medium text-text-muted mb-1.5">
+									Role
+								</label>
+								<Select
+									value={formData.role || "employee"}
+									onChange={(value) => handleSelectChange("role", value)}
+									options={[
+										{ value: "admin", label: "Admin" },
+										{ value: "hr", label: "HR" },
+										{ value: "employee", label: "Employee" },
+									]}
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* Actions */}
+					<div className="flex justify-end gap-3 pt-4 border-t border-border">
+						<Button type="button" variant="outline" onClick={onClose}>
+							Cancel
+						</Button>
+						<Button
+							type="submit"
+							variant="primary"
+							isLoading={isLoading}
+							leftIcon={<Plus className="w-4 h-4" />}
+						>
+							Add Employee
+						</Button>
+					</div>
+				</form>
+			</div>
+		</Modal>
+	);
+};
+
 // Edit Employee Modal Component (Admin/HR only - can edit all fields)
 interface EditEmployeeModalProps {
 	employee: Employee | null;
@@ -584,6 +816,7 @@ export default function EmployeesPage() {
 	);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 
@@ -670,6 +903,32 @@ export default function EmployeesPage() {
 		fetchEmployees();
 	};
 
+	const handleAddEmployee = async (data: AddEmployeeData) => {
+		const response = await fetch("/api/employees", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			credentials: "include",
+			body: JSON.stringify(data),
+		});
+
+		if (!response.ok) {
+			const result = await response.json();
+			throw new Error(result.error || "Failed to add employee");
+		}
+
+		// Refresh employee list
+		await fetchEmployees();
+		announce(`${data.name} added successfully`);
+	};
+
+	const handleOpenAddModal = () => {
+		setIsAddModalOpen(true);
+	};
+
+	const handleCloseAddModal = () => {
+		setIsAddModalOpen(false);
+	};
+
 	// Animation classes
 	const animationClass = prefersReducedMotion ? "" : "animate-fade-in";
 	const staggerClass = (index: number) =>
@@ -710,7 +969,11 @@ export default function EmployeesPage() {
 						<RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
 					</Button>
 					<RoleGuard allowedRoles={["admin", "hr"]}>
-						<Button variant="primary" leftIcon={<Plus className="w-4 h-4" />}>
+						<Button
+							variant="primary"
+							leftIcon={<Plus className="w-4 h-4" />}
+							onClick={handleOpenAddModal}
+						>
 							Add Employee
 						</Button>
 					</RoleGuard>
@@ -814,7 +1077,7 @@ export default function EmployeesPage() {
 			{!isLoading && employees.length === 0 && !searchQuery && (
 				<NoEmployeesFound
 					actionLabel={canEdit ? "Add First Employee" : undefined}
-					onAction={canEdit ? () => {} : undefined}
+					onAction={canEdit ? handleOpenAddModal : undefined}
 				/>
 			)}
 
@@ -834,6 +1097,15 @@ export default function EmployeesPage() {
 					isOpen={isEditModalOpen}
 					onClose={handleCloseEditModal}
 					onSave={handleSaveEmployee}
+				/>
+			)}
+
+			{/* Add Employee Modal (Admin/HR only) */}
+			{canEdit && (
+				<AddEmployeeModal
+					isOpen={isAddModalOpen}
+					onClose={handleCloseAddModal}
+					onSave={handleAddEmployee}
 				/>
 			)}
 		</div>

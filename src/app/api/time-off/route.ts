@@ -55,36 +55,38 @@ export async function GET(request: NextRequest) {
 			.populate("approvedBy", "name email")
 			.sort({ createdAt: -1 });
 
-		const requests = timeOffs.map((t) => {
-			const emp = t.employee as unknown as { _id: mongoose.Types.ObjectId; name: string; email: string; avatar?: string; department?: string; position?: string };
-			const approver = t.approvedBy as unknown as { _id: mongoose.Types.ObjectId; name: string; email: string } | undefined;
+		const requests = timeOffs
+			.filter((t) => t.employee !== null)
+			.map((t) => {
+				const emp = t.employee as unknown as { _id: mongoose.Types.ObjectId; name: string; email: string; avatar?: string; department?: string; position?: string };
+				const approver = t.approvedBy as unknown as { _id: mongoose.Types.ObjectId; name: string; email: string } | undefined;
 			
-			return {
-				id: t._id.toString(),
-				employee: {
-					id: emp._id.toString(),
-					name: emp.name,
-					email: emp.email,
-					avatar: emp.avatar,
-					department: emp.department,
-					position: emp.position,
-				},
-				type: t.type,
-				startDate: t.startDate,
-				endDate: t.endDate,
-				days: t.days,
-				reason: t.reason,
-				status: t.status,
-				attachment: t.attachment,
-				approvedBy: approver ? {
-					id: approver._id.toString(),
-					name: approver.name,
-				} : null,
-				approvedAt: t.approvedAt,
-				rejectionReason: t.rejectionReason,
-				createdAt: t.createdAt,
-			};
-		});
+				return {
+					id: t._id.toString(),
+					employee: {
+						id: emp?._id?.toString() || "",
+						name: emp?.name || "Unknown",
+						email: emp?.email || "",
+						avatar: emp?.avatar,
+						department: emp?.department,
+						position: emp?.position,
+					},
+					type: t.type,
+					startDate: t.startDate,
+					endDate: t.endDate,
+					days: t.days,
+					reason: t.reason,
+					status: t.status,
+					attachment: t.attachment,
+					approvedBy: approver ? {
+						id: approver._id.toString(),
+						name: approver.name,
+					} : null,
+					approvedAt: t.approvedAt,
+					rejectionReason: t.rejectionReason,
+					createdAt: t.createdAt,
+				};
+			});
 
 		return NextResponse.json({ requests }, { status: 200 });
 	} catch (error) {
