@@ -49,6 +49,7 @@ export async function GET(
 				position: user.position,
 				joinDate: user.joinDate,
 				phone: user.phone,
+				address: user.address,
 				status: user.status,
 			},
 		});
@@ -79,17 +80,21 @@ export async function PUT(
 		await connectToDatabase();
 
 		const body = await request.json();
-		const { name, department, position, phone, avatar, status, role } = body;
+		const { name, department, position, phone, address, avatar, status, role, email } = body;
 
 		const updateData: Record<string, unknown> = {};
-		if (name) updateData.name = name;
-		if (department !== undefined) updateData.department = department;
-		if (position !== undefined) updateData.position = position;
+
+		// Fields that employees can edit themselves
 		if (phone !== undefined) updateData.phone = phone;
+		if (address !== undefined) updateData.address = address;
 		if (avatar !== undefined) updateData.avatar = avatar;
 
-		// Only admin/hr can update status and role
+		// Only admin/hr can update these fields
 		if (auth.role === "admin" || auth.role === "hr") {
+			if (name) updateData.name = name;
+			if (email) updateData.email = email;
+			if (department !== undefined) updateData.department = department;
+			if (position !== undefined) updateData.position = position;
 			if (status) updateData.status = status;
 			if (role) updateData.role = role;
 		}
@@ -115,6 +120,7 @@ export async function PUT(
 				department: user.department,
 				position: user.position,
 				phone: user.phone,
+				address: user.address,
 				status: user.status,
 			},
 		});

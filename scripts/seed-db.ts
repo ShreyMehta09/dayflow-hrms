@@ -61,7 +61,8 @@ const Attendance = mongoose.models.Attendance || mongoose.model("Attendance", At
 const TimeOff = mongoose.models.TimeOff || mongoose.model("TimeOff", TimeOffSchema);
 const LeaveBalance = mongoose.models.LeaveBalance || mongoose.model("LeaveBalance", LeaveBalanceSchema);
 
-const demoUsers = [
+// Only 3 core users: admin, hr, employee
+const coreUsers = [
 	{
 		email: "admin@dayflow.com",
 		password: "demo123",
@@ -109,47 +110,21 @@ async function seedDatabase() {
 		await TimeOff.deleteMany({});
 		await LeaveBalance.deleteMany({});
 
-		console.log("👤 Creating demo users...");
+		console.log("👤 Creating core users...");
 		const createdUsers: { _id: mongoose.Types.ObjectId; email: string; role: string; name: string }[] = [];
 		
-		for (const userData of demoUsers) {
+		for (const userData of coreUsers) {
 			const salt = await bcrypt.genSalt(12);
 			const hashedPassword = await bcrypt.hash(userData.password, salt);
 
 			const user = await User.create({
 				...userData,
 				password: hashedPassword,
-				joinDate: new Date("2022-01-15"),
+				joinDate: new Date("2024-01-15"),
 			});
 			
 			createdUsers.push({ _id: user._id, email: userData.email, role: userData.role, name: userData.name });
 			console.log(`   ✅ Created: ${userData.email} (${userData.role})`);
-		}
-
-		// Create additional employees for more realistic data
-		console.log("\n👥 Creating additional employees...");
-		const additionalEmployees = [
-			{ email: "emily.watson@dayflow.com", name: "Emily Watson", department: "Marketing", position: "Marketing Lead", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face" },
-			{ email: "david.kim@dayflow.com", name: "David Kim", department: "Engineering", position: "Backend Developer", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face" },
-			{ email: "lisa.chen@dayflow.com", name: "Lisa Chen", department: "Design", position: "UI/UX Designer", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face" },
-			{ email: "james.wilson@dayflow.com", name: "James Wilson", department: "Sales", position: "Sales Manager", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face" },
-			{ email: "amanda.foster@dayflow.com", name: "Amanda Foster", department: "Engineering", position: "Frontend Developer", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop&crop=face" },
-			{ email: "robert.taylor@dayflow.com", name: "Robert Taylor", department: "Finance", position: "Financial Analyst", avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop&crop=face" },
-		];
-
-		for (const emp of additionalEmployees) {
-			const salt = await bcrypt.genSalt(12);
-			const hashedPassword = await bcrypt.hash("demo123", salt);
-			const user = await User.create({
-				...emp,
-				password: hashedPassword,
-				role: "employee",
-				phone: "+1 (555) 000-0000",
-				status: "active",
-				joinDate: new Date("2023-01-15"),
-			});
-			createdUsers.push({ _id: user._id, email: emp.email, role: "employee", name: emp.name });
-			console.log(`   ✅ Created: ${emp.email}`);
 		}
 
 		// Create attendance records for the past 7 days
@@ -254,11 +229,10 @@ async function seedDatabase() {
 		console.log("   ✅ Leave balances created");
 
 		console.log("\n🎉 Database seeded successfully!");
-		console.log("\n📋 Demo Accounts:");
-		console.log("   Email: admin@dayflow.com    Password: demo123");
-		console.log("   Email: hr@dayflow.com       Password: demo123");
-		console.log("   Email: employee@dayflow.com Password: demo123");
-		console.log("\n📊 Additional test employees also created with password: demo123");
+		console.log("\n📋 Accounts:");
+		console.log("   Email: admin@dayflow.com    Password: demo123 (Admin)");
+		console.log("   Email: hr@dayflow.com       Password: demo123 (HR Manager)");
+		console.log("   Email: employee@dayflow.com Password: demo123 (Employee)");
 
 		process.exit(0);
 	} catch (error) {

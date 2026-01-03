@@ -107,33 +107,37 @@ export async function GET(request: NextRequest) {
 			attendanceRate: totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100) : 0,
 		};
 
-		const activities = recentLeaveRequests.map((req) => {
-			const emp = req.employee as unknown as { name: string; avatar?: string; department?: string };
-			return {
-				id: req._id.toString(),
-				type: "leave_request",
-				employeeName: emp.name,
-				employeeAvatar: emp.avatar,
-				department: emp.department,
-				leaveType: req.type,
-				status: req.status,
-				days: req.days,
-				createdAt: req.createdAt,
-			};
-		});
+		const activities = recentLeaveRequests
+			.filter((req) => req.employee !== null)
+			.map((req) => {
+				const emp = req.employee as unknown as { name: string; avatar?: string; department?: string };
+				return {
+					id: req._id.toString(),
+					type: "leave_request",
+					employeeName: emp?.name || "Unknown",
+					employeeAvatar: emp?.avatar,
+					department: emp?.department,
+					leaveType: req.type,
+					status: req.status,
+					days: req.days,
+					createdAt: req.createdAt,
+				};
+			});
 
-		const onLeave = employeesOnLeave.map((leave) => {
-			const emp = leave.employee as unknown as { _id: string; name: string; avatar?: string; department?: string; position?: string };
-			return {
-				id: emp._id.toString(),
-				name: emp.name,
-				avatar: emp.avatar,
-				department: emp.department,
-				position: emp.position,
-				leaveType: leave.type,
-				returnDate: leave.endDate,
-			};
-		});
+		const onLeave = employeesOnLeave
+			.filter((leave) => leave.employee !== null)
+			.map((leave) => {
+				const emp = leave.employee as unknown as { _id: string; name: string; avatar?: string; department?: string; position?: string };
+				return {
+					id: emp?._id?.toString() || "",
+					name: emp?.name || "Unknown",
+					avatar: emp?.avatar,
+					department: emp?.department,
+					position: emp?.position,
+					leaveType: leave.type,
+					returnDate: leave.endDate,
+				};
+			});
 
 		return NextResponse.json({
 			stats,

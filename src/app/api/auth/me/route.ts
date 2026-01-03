@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
 			position: user.position,
 			joinDate: user.joinDate,
 			phone: user.phone,
+			address: user.address,
 			status: user.status,
 		};
 

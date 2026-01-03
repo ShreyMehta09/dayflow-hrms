@@ -23,6 +23,7 @@ export interface User {
 	position?: string;
 	joinDate?: string;
 	phone?: string;
+	address?: string;
 	status: UserStatus;
 }
 

@@ -15,6 +15,7 @@ export interface IUser extends Document {
 	position?: string;
 	joinDate: Date;
 	phone?: string;
+	address?: string;
 	status: UserStatus;
 	loginId?: string;
 	mustChangePassword: boolean;
@@ -70,6 +71,10 @@ const UserSchema = new Schema<IUser>(
 			default: Date.now,
 		},
 		phone: {
+			type: String,
+			default: "",
+		},
+		address: {
 			type: String,
 			default: "",
 		},

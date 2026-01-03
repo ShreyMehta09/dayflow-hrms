@@ -45,300 +45,6 @@ import {
 	type LeaveBalance,
 } from "@/services/api";
 
-// ==================== MOCK DATA ====================
-
-// Mock leave requests for employee view
-const myLeaveRequests = [
-	{
-		id: "1",
-		type: "Paid Time Off",
-		startDate: "2025-12-28",
-		endDate: "2026-01-02",
-		days: 4,
-		reason: "Family vacation",
-		status: "approved",
-		appliedOn: "2025-12-20",
-		allocation: "2025 Annual Allocation",
-	},
-	{
-		id: "2",
-		type: "Sick Leave",
-		startDate: "2025-12-26",
-		endDate: "2025-12-26",
-		days: 1,
-		reason: "Medical appointment",
-		status: "approved",
-		appliedOn: "2025-12-24",
-		allocation: "2025 Sick Leave",
-		attachment: "medical_certificate.pdf",
-	},
-	{
-		id: "3",
-		type: "Paid Time Off",
-		startDate: "2026-01-15",
-		endDate: "2026-01-17",
-		days: 3,
-		reason: "Personal matters",
-		status: "pending",
-		appliedOn: "2026-01-02",
-		allocation: "2025 Annual Allocation",
-	},
-	{
-		id: "4",
-		type: "Sick Leave",
-		startDate: "2025-11-10",
-		endDate: "2025-11-10",
-		days: 1,
-		reason: "Flu",
-		status: "rejected",
-		appliedOn: "2025-11-09",
-		allocation: "2025 Sick Leave",
-		rejectionReason: "Insufficient documentation",
-	},
-];
-
-// Mock all leave requests for admin view
-const allLeaveRequests = [
-	{
-		id: "1",
-		employee: {
-			id: "emp1",
-			name: "Emily Watson",
-			avatar:
-				"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100",
-			department: "Marketing",
-			position: "Marketing Manager",
-		},
-		type: "Paid Time Off",
-		startDate: "2026-01-10",
-		endDate: "2026-01-14",
-		days: 5,
-		reason: "Family vacation to Europe",
-		status: "pending",
-		appliedOn: "2026-01-02",
-		allocation: "2026 Annual Allocation",
-	},
-	{
-		id: "2",
-		employee: {
-			id: "emp2",
-			name: "David Kim",
-			avatar:
-				"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-			department: "Engineering",
-			position: "Senior Developer",
-		},
-		type: "Sick Leave",
-		startDate: "2026-01-03",
-		endDate: "2026-01-03",
-		days: 1,
-		reason: "Doctor's appointment",
-		status: "pending",
-		appliedOn: "2026-01-02",
-		allocation: "2026 Sick Leave",
-		attachment: "appointment_confirmation.pdf",
-	},
-	{
-		id: "3",
-		employee: {
-			id: "emp3",
-			name: "Lisa Chen",
-			avatar:
-				"https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-			department: "Design",
-			position: "UI/UX Designer",
-		},
-		type: "Paid Time Off",
-		startDate: "2026-01-20",
-		endDate: "2026-01-22",
-		days: 3,
-		reason: "Wedding ceremony",
-		status: "pending",
-		appliedOn: "2026-01-01",
-		allocation: "2026 Annual Allocation",
-	},
-	{
-		id: "4",
-		employee: {
-			id: "emp4",
-			name: "Marcus Johnson",
-			avatar:
-				"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100",
-			department: "Sales",
-			position: "Sales Representative",
-		},
-		type: "Paid Time Off",
-		startDate: "2025-12-28",
-		endDate: "2026-01-02",
-		days: 4,
-		reason: "Year-end holidays",
-		status: "approved",
-		appliedOn: "2025-12-20",
-		allocation: "2025 Annual Allocation",
-		approvedBy: "HR Manager",
-		approvedOn: "2025-12-21",
-	},
-	{
-		id: "5",
-		employee: {
-			id: "emp5",
-			name: "Sarah Williams",
-			avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100",
-			department: "Finance",
-			position: "Financial Analyst",
-		},
-		type: "Sick Leave",
-		startDate: "2025-12-26",
-		endDate: "2025-12-27",
-		days: 2,
-		reason: "Flu recovery",
-		status: "approved",
-		appliedOn: "2025-12-25",
-		allocation: "2025 Sick Leave",
-		attachment: "medical_note.pdf",
-		approvedBy: "HR Manager",
-		approvedOn: "2025-12-25",
-	},
-	{
-		id: "6",
-		employee: {
-			id: "emp6",
-			name: "James Wilson",
-			avatar:
-				"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-			department: "Engineering",
-			position: "Backend Developer",
-		},
-		type: "Paid Time Off",
-		startDate: "2025-12-15",
-		endDate: "2025-12-16",
-		days: 2,
-		reason: "Personal errands",
-		status: "rejected",
-		appliedOn: "2025-12-10",
-		allocation: "2025 Annual Allocation",
-		rejectedBy: "HR Manager",
-		rejectedOn: "2025-12-11",
-		rejectionReason: "Critical project deadline",
-	},
-];
-
-// Mock allocations data for admin
-const allAllocations = [
-	{
-		id: "1",
-		employee: {
-			id: "emp1",
-			name: "Emily Watson",
-			avatar:
-				"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100",
-			department: "Marketing",
-		},
-		type: "Paid Time Off",
-		year: 2026,
-		allocated: 20,
-		used: 0,
-		pending: 5,
-		available: 15,
-	},
-	{
-		id: "2",
-		employee: {
-			id: "emp1",
-			name: "Emily Watson",
-			avatar:
-				"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100",
-			department: "Marketing",
-		},
-		type: "Sick Leave",
-		year: 2026,
-		allocated: 10,
-		used: 0,
-		pending: 0,
-		available: 10,
-	},
-	{
-		id: "3",
-		employee: {
-			id: "emp2",
-			name: "David Kim",
-			avatar:
-				"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-			department: "Engineering",
-		},
-		type: "Paid Time Off",
-		year: 2026,
-		allocated: 20,
-		used: 0,
-		pending: 0,
-		available: 20,
-	},
-	{
-		id: "4",
-		employee: {
-			id: "emp2",
-			name: "David Kim",
-			avatar:
-				"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-			department: "Engineering",
-		},
-		type: "Sick Leave",
-		year: 2026,
-		allocated: 10,
-		used: 0,
-		pending: 1,
-		available: 9,
-	},
-	{
-		id: "5",
-		employee: {
-			id: "emp3",
-			name: "Lisa Chen",
-			avatar:
-				"https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-			department: "Design",
-		},
-		type: "Paid Time Off",
-		year: 2026,
-		allocated: 18,
-		used: 0,
-		pending: 3,
-		available: 15,
-	},
-	{
-		id: "6",
-		employee: {
-			id: "emp3",
-			name: "Lisa Chen",
-			avatar:
-				"https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-			department: "Design",
-		},
-		type: "Sick Leave",
-		year: 2026,
-		allocated: 10,
-		used: 0,
-		pending: 0,
-		available: 10,
-	},
-];
-
-// Employee leave balance
-const leaveBalance = {
-	paidTimeOff: {
-		total: 20,
-		used: 7,
-		pending: 3,
-		available: 10,
-	},
-	sickLeave: {
-		total: 10,
-		used: 1,
-		pending: 0,
-		available: 9,
-	},
-};
-
 // ==================== HELPER FUNCTIONS ====================
 
 const getStatusBadge = (status: string) => {
@@ -744,81 +450,86 @@ function EmployeeTimeOffView() {
 							</tr>
 						</thead>
 						<tbody>
-							{myLeaveRequests.map((request) => (
-								<tr
-									key={request.id}
-									className="border-b border-border last:border-0 hover:bg-surface/30 transition-colors"
-								>
-									<td className="px-6 py-4">
-										<Badge
-											variant={
-												request.type === "Paid Time Off"
-													? "primary"
-													: "secondary"
-											}
-											size="sm"
-										>
-											{request.type === "Paid Time Off" ? (
-												<Umbrella className="w-3 h-3" />
-											) : (
-												<Stethoscope className="w-3 h-3" />
-											)}
-											{request.type}
-										</Badge>
-									</td>
-									<td className="px-6 py-4">
-										<div className="flex items-center gap-2">
-											<Calendar className="w-4 h-4 text-text-muted" />
-											<div>
-												<p className="text-sm font-medium text-text-primary">
-													{formatDate(request.startDate)}
-												</p>
-												<p className="text-xs text-text-muted">
-													to {formatDate(request.endDate)}
-												</p>
-											</div>
-										</div>
-									</td>
-									<td className="px-6 py-4">
-										<span className="font-semibold text-text-primary">
-											{request.days}
-										</span>
-									</td>
-									<td className="px-6 py-4 hidden lg:table-cell">
-										<span className="text-sm text-text-muted">
-											{request.allocation}
-										</span>
-									</td>
-									<td className="px-6 py-4 hidden xl:table-cell">
-										<span className="text-sm text-text-muted line-clamp-2">
-											{request.reason}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										<div className="space-y-1">
-											{getStatusBadge(request.status)}
-											{request.attachment && (
-												<div className="flex items-center gap-1 text-xs text-text-muted">
-													<FileText className="w-3 h-3" />
-													<span>Attachment</span>
+							{leaveRequests.map((request) => {
+								const isPaidTimeOff =
+									request.type === "paid_time_off" ||
+									request.type === "Paid Time Off";
+								const displayType = isPaidTimeOff
+									? "Paid Time Off"
+									: "Sick Leave";
+								return (
+									<tr
+										key={request.id}
+										className="border-b border-border last:border-0 hover:bg-surface/30 transition-colors"
+									>
+										<td className="px-6 py-4">
+											<Badge
+												variant={isPaidTimeOff ? "primary" : "secondary"}
+												size="sm"
+											>
+												{isPaidTimeOff ? (
+													<Umbrella className="w-3 h-3" />
+												) : (
+													<Stethoscope className="w-3 h-3" />
+												)}
+												{displayType}
+											</Badge>
+										</td>
+										<td className="px-6 py-4">
+											<div className="flex items-center gap-2">
+												<Calendar className="w-4 h-4 text-text-muted" />
+												<div>
+													<p className="text-sm font-medium text-text-primary">
+														{formatDate(request.startDate)}
+													</p>
+													<p className="text-xs text-text-muted">
+														to {formatDate(request.endDate)}
+													</p>
 												</div>
-											)}
-										</div>
-									</td>
-									<td className="px-6 py-4 hidden lg:table-cell">
-										<span className="text-sm text-text-muted">
-											{formatDate(request.appliedOn)}
-										</span>
-									</td>
-								</tr>
-							))}
+											</div>
+										</td>
+										<td className="px-6 py-4">
+											<span className="font-semibold text-text-primary">
+												{request.days}
+											</span>
+										</td>
+										<td className="px-6 py-4 hidden lg:table-cell">
+											<span className="text-sm text-text-muted">
+												{new Date().getFullYear()}{" "}
+												{isPaidTimeOff ? "Annual" : "Sick"} Leave
+											</span>
+										</td>
+										<td className="px-6 py-4 hidden xl:table-cell">
+											<span className="text-sm text-text-muted line-clamp-2">
+												{request.reason}
+											</span>
+										</td>
+										<td className="px-6 py-4">
+											<div className="space-y-1">
+												{getStatusBadge(request.status)}
+												{request.attachment && (
+													<div className="flex items-center gap-1 text-xs text-text-muted">
+														<FileText className="w-3 h-3" />
+														<span>Attachment</span>
+													</div>
+												)}
+											</div>
+										</td>
+										<td className="px-6 py-4 hidden lg:table-cell">
+											<span className="text-sm text-text-muted">
+												{formatDate(request.createdAt)}
+											</span>
+										</td>
+									</tr>
+								);
+							})}
 						</tbody>
 					</table>
 				</div>
 
-				{myLeaveRequests.length === 0 && (
+				{leaveRequests.length === 0 && (
 					<div className="text-center py-12">
-						<p className="text-text-muted">No leave requests found.</p>
+						<NoLeaveRequests />
 					</div>
 				)}
 			</Card>
@@ -1066,18 +777,22 @@ function AdminTimeOffView() {
 		return matchesSearch && matchesStatus && matchesType;
 	});
 
-	// Filter allocations
-	const filteredAllocations = allAllocations.filter((allocation) => {
-		const matchesSearch =
-			allocation.employee.name
-				.toLowerCase()
-				.includes(searchQuery.toLowerCase()) ||
-			allocation.employee.department
-				.toLowerCase()
-				.includes(searchQuery.toLowerCase());
-		const matchesType = typeFilter === "all" || allocation.type === typeFilter;
-		return matchesSearch && matchesType;
-	});
+	// Allocations data is not available via API yet
+	const filteredAllocations: Array<{
+		id: string;
+		employee: {
+			id: string;
+			name: string;
+			avatar?: string;
+			department?: string;
+		};
+		type: string;
+		year: number;
+		allocated: number;
+		used: number;
+		pending: number;
+		available: number;
+	}> = [];
 
 	// Handle approve/reject
 	const handleApprove = async (requestId: string) => {

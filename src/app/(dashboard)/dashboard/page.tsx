@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
 	Card,
 	CardHeader,
@@ -34,30 +34,63 @@ import {
 	Coffee,
 	Cake,
 	RefreshCw,
+	LogIn,
+	LogOut,
 } from "lucide-react";
 import { dashboardApi, type DashboardStats } from "@/services/api";
 
+// Today's attendance state
+interface TodayAttendance {
+	id?: string;
+	checkIn?: string;
+	checkOut?: string;
+	status?: string;
+	workHours?: number;
+	breakTime?: number;
+	overtime?: number;
+}
+
 // Quick Actions for employees
-const quickActions = [
+const getQuickActions = (
+	isCheckedIn: boolean,
+	isCheckedOut: boolean,
+	onClockAction: () => void
+) => [
 	{
-		label: "Clock In",
-		icon: <Timer className="w-5 h-5" />,
+		label: isCheckedOut
+			? "Done for today"
+			: isCheckedIn
+			? "Clock Out"
+			: "Clock In",
+		icon: isCheckedIn ? (
+			<LogOut className="w-5 h-5" />
+		) : (
+			<LogIn className="w-5 h-5" />
+		),
 		variant: "primary" as const,
+		onClick: onClockAction,
+		disabled: isCheckedOut,
 	},
 	{
 		label: "Request Leave",
 		icon: <Calendar className="w-5 h-5" />,
 		variant: "outline" as const,
+		onClick: () => {},
+		disabled: false,
 	},
 	{
 		label: "Log Expense",
 		icon: <DollarSign className="w-5 h-5" />,
 		variant: "outline" as const,
+		onClick: () => {},
+		disabled: false,
 	},
 	{
 		label: "View Payslip",
 		icon: <Briefcase className="w-5 h-5" />,
 		variant: "outline" as const,
+		onClick: () => {},
+		disabled: false,
 	},
 ];
 
@@ -71,6 +104,97 @@ export default function DashboardPage() {
 	const [error, setError] = useState<Error | null>(null);
 	const [dashboardData, setDashboardData] = useState<DashboardStats | null>(
 		null
+	);
+
+	// Attendance states
+	const [todayAttendance, setTodayAttendance] =
+		useState<TodayAttendance | null>(null);
+	const [isCheckedIn, setIsCheckedIn] = useState(false);
+	const [isCheckedOut, setIsCheckedOut] = useState(false);
+	const [isClockLoading, setIsClockLoading] = useState(false);
+	const [workingTime, setWorkingTime] = useState<string>("--:--");
+
+	// Fetch today's attendance
+	const fetchTodayAttendance = useCallback(async () => {
+		try {
+			const response = await fetch("/api/attendance/today", {
+				credentials: "include",
+			});
+			if (response.ok) {
+				const data = await response.json();
+				setTodayAttendance(data.today);
+				setIsCheckedIn(data.isCheckedIn);
+				setIsCheckedOut(data.isCheckedOut);
+			}
+		} catch (err) {
+			console.error("Failed to fetch today's attendance:", err);
+		}
+	}, []);
+
+	// Calculate working time
+	useEffect(() => {
+		if (!isCheckedIn || !todayAttendance?.checkIn) {
+			setWorkingTime("--:--");
+			return;
+		}
+
+		const updateWorkingTime = () => {
+			const checkInTime = new Date(todayAttendance.checkIn!).getTime();
+			const endTime = todayAttendance.checkOut
+				? new Date(todayAttendance.checkOut).getTime()
+				: Date.now();
+			const diffMs = endTime - checkInTime;
+			const hours = Math.floor(diffMs / (1000 * 60 * 60));
+			const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+			setWorkingTime(`${hours}h ${minutes}m`);
+		};
+
+		updateWorkingTime();
+
+		// Update every minute if not checked out
+		if (!isCheckedOut) {
+			const interval = setInterval(updateWorkingTime, 60000);
+			return () => clearInterval(interval);
+		}
+	}, [isCheckedIn, isCheckedOut, todayAttendance]);
+
+	// Clock In/Out handler
+	const handleClockAction = async () => {
+		if (isCheckedOut) return;
+
+		setIsClockLoading(true);
+		try {
+			const action = isCheckedIn ? "check-out" : "check-in";
+			const response = await fetch("/api/attendance", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ action }),
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				announce(data.message);
+				await fetchTodayAttendance();
+				// Also refresh dashboard stats
+				await fetchDashboard();
+			} else {
+				const data = await response.json();
+				announce(data.error || "Failed to process attendance", "assertive");
+			}
+		} catch (err) {
+			console.error("Clock action failed:", err);
+			announce("Failed to process attendance", "assertive");
+		} finally {
+			setIsClockLoading(false);
+		}
+	};
+
+	// Get quick actions with current state
+	const quickActions = getQuickActions(
+		isCheckedIn,
+		isCheckedOut,
+		handleClockAction
 	);
 
 	// Build dynamic stats from API data
@@ -162,7 +286,7 @@ export default function DashboardPage() {
 	const stats = getStats();
 
 	// Fetch dashboard data
-	const fetchDashboard = async () => {
+	const fetchDashboard = useCallback(async () => {
 		setIsLoading(true);
 		setError(null);
 		try {
@@ -177,14 +301,16 @@ export default function DashboardPage() {
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, [announce]);
 
 	useEffect(() => {
 		fetchDashboard();
-	}, [announce]);
+		fetchTodayAttendance();
+	}, [fetchDashboard, fetchTodayAttendance]);
 
 	const handleRefresh = () => {
 		fetchDashboard();
+		fetchTodayAttendance();
 	};
 
 	const getColorClasses = (color: string) => {
@@ -295,8 +421,24 @@ export default function DashboardPage() {
 							Add Employee
 						</Button>
 					</RoleGuard>
-					<Button variant="primary" leftIcon={<Timer className="w-4 h-4" />}>
-						Clock In
+					<Button
+						variant={isCheckedIn && !isCheckedOut ? "secondary" : "primary"}
+						leftIcon={
+							isCheckedIn ? (
+								<LogOut className="w-4 h-4" />
+							) : (
+								<LogIn className="w-4 h-4" />
+							)
+						}
+						onClick={handleClockAction}
+						isLoading={isClockLoading}
+						disabled={isCheckedOut}
+					>
+						{isCheckedOut
+							? "Done for today"
+							: isCheckedIn
+							? "Clock Out"
+							: "Clock In"}
 					</Button>
 				</div>
 			</div>
@@ -376,6 +518,11 @@ export default function DashboardPage() {
 											key={index}
 											variant={action.variant}
 											className="flex-col h-auto py-4 gap-2"
+											onClick={action.onClick}
+											disabled={
+												action.disabled || (index === 0 && isClockLoading)
+											}
+											isLoading={index === 0 && isClockLoading}
 										>
 											{action.icon}
 											<span className="text-xs">{action.label}</span>
@@ -458,44 +605,129 @@ export default function DashboardPage() {
 						<Card>
 							<CardHeader>
 								<CardTitle>Today&apos;s Attendance</CardTitle>
-								<Badge variant="success" dot>
-									Active
+								<Badge
+									variant={
+										isCheckedOut
+											? "secondary"
+											: isCheckedIn
+											? "success"
+											: "warning"
+									}
+									dot
+								>
+									{isCheckedOut
+										? "Completed"
+										: isCheckedIn
+										? "Working"
+										: "Not Clocked In"}
 								</Badge>
 							</CardHeader>
 							<CardContent>
 								<div className="grid grid-cols-3 gap-4 mb-6">
 									<div className="text-center p-4 rounded-xl bg-surface">
-										<p className="text-2xl font-bold text-success">9:02</p>
+										<p
+											className={cn(
+												"text-2xl font-bold",
+												isCheckedIn ? "text-success" : "text-text-muted"
+											)}
+										>
+											{todayAttendance?.checkIn
+												? new Date(todayAttendance.checkIn).toLocaleTimeString(
+														[],
+														{ hour: "2-digit", minute: "2-digit" }
+												  )
+												: "--:--"}
+										</p>
 										<p className="text-xs text-text-muted mt-1">Clock In</p>
 									</div>
 									<div className="text-center p-4 rounded-xl bg-surface">
-										<p className="text-2xl font-bold text-text-muted">--:--</p>
+										<p
+											className={cn(
+												"text-2xl font-bold",
+												isCheckedOut ? "text-error" : "text-text-muted"
+											)}
+										>
+											{todayAttendance?.checkOut
+												? new Date(todayAttendance.checkOut).toLocaleTimeString(
+														[],
+														{ hour: "2-digit", minute: "2-digit" }
+												  )
+												: "--:--"}
+										</p>
 										<p className="text-xs text-text-muted mt-1">Clock Out</p>
 									</div>
 									<div className="text-center p-4 rounded-xl bg-surface">
-										<p className="text-2xl font-bold text-primary">5h 32m</p>
+										<p className="text-2xl font-bold text-primary">
+											{workingTime}
+										</p>
 										<p className="text-xs text-text-muted mt-1">Working</p>
 									</div>
 								</div>
 								<div className="space-y-4">
-									<div className="flex items-center justify-between text-sm">
-										<span className="text-text-muted">Daily Progress</span>
-										<span className="font-medium text-text-primary">
-											5.5 / 8 hours
-										</span>
-									</div>
-									<Progress value={68.75} variant="primary" size="md" />
+									{(() => {
+										// Calculate work hours and progress
+										const workHoursDecimal = todayAttendance?.workHours || 0;
+										const targetHours = 8;
+										const progressPercent = Math.min(
+											(workHoursDecimal / targetHours) * 100,
+											100
+										);
+										const hoursWorked =
+											workingTime !== "--:--" ? workingTime : "0h 0m";
+
+										return (
+											<>
+												<div className="flex items-center justify-between text-sm">
+													<span className="text-text-muted">
+														Daily Progress
+													</span>
+													<span className="font-medium text-text-primary">
+														{hoursWorked} / {targetHours} hours
+													</span>
+												</div>
+												<Progress
+													value={progressPercent}
+													variant="primary"
+													size="md"
+												/>
+											</>
+										);
+									})()}
 									<div className="flex items-center gap-4 text-sm text-text-muted">
 										<div className="flex items-center gap-1.5">
 											<Coffee className="w-4 h-4" />
-											<span>Break: 30m</span>
+											<span>Break: {todayAttendance?.breakTime || 0}m</span>
 										</div>
 										<div className="flex items-center gap-1.5">
 											<Clock className="w-4 h-4" />
-											<span>Overtime: 0h</span>
+											<span>Overtime: {todayAttendance?.overtime || 0}h</span>
 										</div>
 									</div>
 								</div>
+
+								{/* Clock In/Out Button */}
+								{!isCheckedIn && (
+									<Button
+										variant="primary"
+										className="w-full mt-4"
+										onClick={handleClockAction}
+										isLoading={isClockLoading}
+										leftIcon={<LogIn className="w-4 h-4" />}
+									>
+										Clock In Now
+									</Button>
+								)}
+								{isCheckedIn && !isCheckedOut && (
+									<Button
+										variant="secondary"
+										className="w-full mt-4"
+										onClick={handleClockAction}
+										isLoading={isClockLoading}
+										leftIcon={<LogOut className="w-4 h-4" />}
+									>
+										Clock Out
+									</Button>
+								)}
 							</CardContent>
 						</Card>
 					</RoleGuard>

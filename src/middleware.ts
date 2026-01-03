@@ -8,6 +8,8 @@ const publicRoutes = [
 	"/api/auth/login",
 	"/api/auth/signup",
 	"/api/auth/logout",
+	"/api/auth/send-otp",
+	"/api/auth/verify-otp",
 ];
 
 // Routes that are only for non-authenticated users

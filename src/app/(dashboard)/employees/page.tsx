@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
 	Card,
@@ -11,6 +11,8 @@ import {
 	NoEmployeesFound,
 	NoSearchResults,
 	InlineError,
+	Input,
+	Select,
 } from "@/components/ui";
 import { useAuth, RoleGuard } from "@/context/AuthContext";
 import { useReducedMotion, useAriaAnnounce } from "@/lib/hooks";
@@ -28,10 +30,16 @@ import {
 	Edit,
 	Shield,
 	RefreshCw,
+	Camera,
+	Save,
+	AlertCircle,
+	MapPin,
+	User,
 } from "lucide-react";
 
 // Status types
 type EmployeeStatus = "present" | "absent" | "on_leave";
+type UserRole = "admin" | "hr" | "employee";
 
 // Employee interface
 interface Employee {
@@ -39,13 +47,312 @@ interface Employee {
 	name: string;
 	email: string;
 	phone?: string;
+	address?: string;
 	department?: string;
 	position?: string;
 	status: EmployeeStatus;
 	avatar?: string;
 	joinDate?: string;
-	role?: string;
+	role?: UserRole;
 }
+
+// Edit Employee Data interface
+interface EditEmployeeData {
+	name?: string;
+	email?: string;
+	phone?: string;
+	address?: string;
+	department?: string;
+	position?: string;
+	avatar?: string;
+	role?: UserRole;
+	status?: EmployeeStatus;
+}
+
+// Edit Employee Modal Component (Admin/HR only - can edit all fields)
+interface EditEmployeeModalProps {
+	employee: Employee | null;
+	isOpen: boolean;
+	onClose: () => void;
+	onSave: (id: string, data: EditEmployeeData) => Promise<void>;
+}
+
+const EditEmployeeModal = ({
+	employee,
+	isOpen,
+	onClose,
+	onSave,
+}: EditEmployeeModalProps) => {
+	const [formData, setFormData] = useState<EditEmployeeData>({});
+	const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (isOpen && employee) {
+			setFormData({
+				name: employee.name || "",
+				email: employee.email || "",
+				phone: employee.phone || "",
+				address: employee.address || "",
+				department: employee.department || "",
+				position: employee.position || "",
+				avatar: employee.avatar || "",
+				role: employee.role || "employee",
+				status: employee.status || "present",
+			});
+			setAvatarPreview(employee.avatar || null);
+			setError(null);
+		}
+	}, [isOpen, employee]);
+
+	const handleInputChange = (
+		e: React.ChangeEvent<
+			HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+		>
+	) => {
+		const { name, value } = e.target;
+		setFormData((prev) => ({ ...prev, [name]: value }));
+	};
+
+	const handleSelectChange = (name: string, value: string) => {
+		setFormData((prev) => ({ ...prev, [name]: value }));
+	};
+
+	const handleAvatarClick = () => {
+		fileInputRef.current?.click();
+	};
+
+	const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (file) {
+			if (file.size > 5 * 1024 * 1024) {
+				setError("Image must be less than 5MB");
+				return;
+			}
+			if (!file.type.startsWith("image/")) {
+				setError("Please upload an image file");
+				return;
+			}
+			const reader = new FileReader();
+			reader.onloadend = () => {
+				const base64 = reader.result as string;
+				setAvatarPreview(base64);
+				setFormData((prev) => ({ ...prev, avatar: base64 }));
+			};
+			reader.readAsDataURL(file);
+		}
+	};
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!employee) return;
+
+		setIsLoading(true);
+		setError(null);
+
+		try {
+			await onSave(employee.id, formData);
+			onClose();
+		} catch (err) {
+			setError(
+				err instanceof Error ? err.message : "Failed to update employee"
+			);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	if (!employee) return null;
+
+	return (
+		<Modal isOpen={isOpen} onClose={onClose} size="lg">
+			<div className="p-6 max-h-[90vh] overflow-y-auto">
+				<div className="flex items-start justify-between mb-6">
+					<div>
+						<h2 className="text-xl font-semibold text-text-primary">
+							Edit Employee
+						</h2>
+						<p className="text-sm text-text-muted mt-1">
+							Update employee details
+						</p>
+					</div>
+					<button
+						onClick={onClose}
+						className="p-1 text-text-muted hover:text-text-primary transition-colors"
+					>
+						<X className="w-5 h-5" />
+					</button>
+				</div>
+
+				{error && (
+					<div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-error/10 border border-error/30 text-error text-sm">
+						<AlertCircle className="w-4 h-4 flex-shrink-0" />
+						<span>{error}</span>
+					</div>
+				)}
+
+				<form onSubmit={handleSubmit} className="space-y-6">
+					{/* Avatar Upload */}
+					<div className="flex flex-col items-center gap-4">
+						<div className="relative">
+							<Avatar
+								src={avatarPreview || undefined}
+								name={formData.name || "Employee"}
+								size="2xl"
+								className="ring-4 ring-border"
+							/>
+							<button
+								type="button"
+								onClick={handleAvatarClick}
+								className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full hover:bg-primary-hover transition-colors shadow-lg"
+							>
+								<Camera className="w-4 h-4" />
+							</button>
+							<input
+								type="file"
+								ref={fileInputRef}
+								onChange={handleAvatarChange}
+								accept="image/*"
+								className="hidden"
+							/>
+						</div>
+						<p className="text-xs text-text-muted">
+							Click camera icon to change photo
+						</p>
+					</div>
+
+					{/* Personal Information */}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2 mb-2">
+							<User className="w-4 h-4 text-primary" />
+							<span className="text-sm font-medium text-text-primary">
+								Personal Information
+							</span>
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<Input
+								name="name"
+								label="Full Name"
+								value={formData.name}
+								onChange={handleInputChange}
+								leftIcon={<User className="w-4 h-4" />}
+								fullWidth
+							/>
+							<Input
+								name="email"
+								label="Email Address"
+								type="email"
+								value={formData.email}
+								onChange={handleInputChange}
+								leftIcon={<Mail className="w-4 h-4" />}
+								fullWidth
+							/>
+							<Input
+								name="phone"
+								label="Phone Number"
+								value={formData.phone}
+								onChange={handleInputChange}
+								leftIcon={<Phone className="w-4 h-4" />}
+								fullWidth
+							/>
+							<div>
+								<label className="block text-sm font-medium text-text-muted mb-1.5">
+									Role
+								</label>
+								<Select
+									value={formData.role || "employee"}
+									onChange={(value) => handleSelectChange("role", value)}
+									options={[
+										{ value: "admin", label: "Admin" },
+										{ value: "hr", label: "HR" },
+										{ value: "employee", label: "Employee" },
+									]}
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* Work Information */}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2 mb-2">
+							<Briefcase className="w-4 h-4 text-secondary" />
+							<span className="text-sm font-medium text-text-primary">
+								Work Information
+							</span>
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<Input
+								name="department"
+								label="Department"
+								value={formData.department}
+								onChange={handleInputChange}
+								leftIcon={<Building2 className="w-4 h-4" />}
+								fullWidth
+							/>
+							<Input
+								name="position"
+								label="Position"
+								value={formData.position}
+								onChange={handleInputChange}
+								leftIcon={<Briefcase className="w-4 h-4" />}
+								fullWidth
+							/>
+							<div>
+								<label className="block text-sm font-medium text-text-muted mb-1.5">
+									Status
+								</label>
+								<Select
+									value={formData.status || "present"}
+									onChange={(value) => handleSelectChange("status", value)}
+									options={[
+										{ value: "present", label: "Present" },
+										{ value: "absent", label: "Absent" },
+										{ value: "on_leave", label: "On Leave" },
+									]}
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* Address */}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2 mb-2">
+							<MapPin className="w-4 h-4 text-warning" />
+							<span className="text-sm font-medium text-text-primary">
+								Address
+							</span>
+						</div>
+						<textarea
+							name="address"
+							value={formData.address}
+							onChange={handleInputChange}
+							placeholder="Enter employee address"
+							rows={3}
+							className="w-full px-4 py-2.5 bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+						/>
+					</div>
+
+					{/* Actions */}
+					<div className="flex justify-end gap-3 pt-4 border-t border-border">
+						<Button type="button" variant="outline" onClick={onClose}>
+							Cancel
+						</Button>
+						<Button
+							type="submit"
+							variant="primary"
+							isLoading={isLoading}
+							leftIcon={<Save className="w-4 h-4" />}
+						>
+							Save Changes
+						</Button>
+					</div>
+				</form>
+			</div>
+		</Modal>
+	);
+};
 
 // Status indicator component (positioned at top-right corner)
 const StatusIndicator = ({ status }: { status: EmployeeStatus }) => {
@@ -112,6 +419,7 @@ interface EmployeeProfileModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	canEdit: boolean;
+	onEdit?: () => void;
 }
 
 const EmployeeProfileModal = ({
@@ -119,6 +427,7 @@ const EmployeeProfileModal = ({
 	isOpen,
 	onClose,
 	canEdit,
+	onEdit,
 }: EmployeeProfileModalProps) => {
 	if (!employee) return null;
 
@@ -181,11 +490,12 @@ const EmployeeProfileModal = ({
 							</span>
 						</div>
 					</div>
-					{canEdit && (
+					{canEdit && onEdit && (
 						<Button
 							variant="outline"
 							size="sm"
 							leftIcon={<Edit className="w-4 h-4" />}
+							onClick={onEdit}
 						>
 							Edit
 						</Button>
@@ -273,6 +583,7 @@ export default function EmployeesPage() {
 		null
 	);
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 
@@ -312,8 +623,8 @@ export default function EmployeesPage() {
 	const filteredEmployees = employees.filter(
 		(emp) =>
 			emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			emp.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			emp.department.toLowerCase().includes(searchQuery.toLowerCase())
+			emp.position?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+			emp.department?.toLowerCase().includes(searchQuery.toLowerCase())
 	);
 
 	const handleCardClick = (employee: Employee) => {
@@ -325,6 +636,34 @@ export default function EmployeesPage() {
 	const handleCloseModal = () => {
 		setIsModalOpen(false);
 		setSelectedEmployee(null);
+	};
+
+	const handleEditClick = () => {
+		setIsModalOpen(false);
+		setIsEditModalOpen(true);
+	};
+
+	const handleCloseEditModal = () => {
+		setIsEditModalOpen(false);
+		setSelectedEmployee(null);
+	};
+
+	const handleSaveEmployee = async (id: string, data: EditEmployeeData) => {
+		const response = await fetch(`/api/employees/${id}`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			credentials: "include",
+			body: JSON.stringify(data),
+		});
+
+		if (!response.ok) {
+			const result = await response.json();
+			throw new Error(result.error || "Failed to update employee");
+		}
+
+		// Refresh employee list
+		await fetchEmployees();
+		announce(`${data.name || "Employee"} updated successfully`);
 	};
 
 	const handleRefresh = () => {
@@ -485,7 +824,18 @@ export default function EmployeesPage() {
 				isOpen={isModalOpen}
 				onClose={handleCloseModal}
 				canEdit={canEdit}
+				onEdit={handleEditClick}
 			/>
+
+			{/* Edit Employee Modal (Admin/HR only) */}
+			{canEdit && (
+				<EditEmployeeModal
+					employee={selectedEmployee}
+					isOpen={isEditModalOpen}
+					onClose={handleCloseEditModal}
+					onSave={handleSaveEmployee}
+				/>
+			)}
 		</div>
 	);
 }

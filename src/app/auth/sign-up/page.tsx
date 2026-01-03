@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, Modal } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
 import {
 	Building2,
@@ -15,13 +15,16 @@ import {
 	Eye,
 	EyeOff,
 	X,
-	Image as ImageIcon,
 	AlertCircle,
+	CheckCircle,
+	RefreshCw,
+	Shield,
 } from "lucide-react";
 
 export default function SignUpPage() {
 	const { signup } = useAuth();
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
 	const [formData, setFormData] = useState({
 		companyName: "",
@@ -40,6 +43,26 @@ export default function SignUpPage() {
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [apiError, setApiError] = useState<string | null>(null);
 
+	// OTP States
+	const [showOtpModal, setShowOtpModal] = useState(false);
+	const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+	const [otpError, setOtpError] = useState<string | null>(null);
+	const [isVerifying, setIsVerifying] = useState(false);
+	const [isSendingOtp, setIsSendingOtp] = useState(false);
+	const [resendCooldown, setResendCooldown] = useState(0);
+	const [isEmailVerified, setIsEmailVerified] = useState(false);
+
+	// Countdown timer for resend
+	useEffect(() => {
+		if (resendCooldown > 0) {
+			const timer = setTimeout(
+				() => setResendCooldown(resendCooldown - 1),
+				1000
+			);
+			return () => clearTimeout(timer);
+		}
+	}, [resendCooldown]);
+
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const { name, value } = e.target;
 		setFormData((prev) => ({ ...prev, [name]: value }));
@@ -49,6 +72,10 @@ export default function SignUpPage() {
 		}
 		if (apiError) {
 			setApiError(null);
+		}
+		// Reset email verification if email changes
+		if (name === "email" && isEmailVerified) {
+			setIsEmailVerified(false);
 		}
 	};
 
@@ -81,7 +108,7 @@ export default function SignUpPage() {
 		}
 	};
 
-	const validateForm = () => {
+	const validateForm = (forOtp = false) => {
 		const newErrors: Record<string, string> = {};
 
 		if (!formData.companyName.trim()) {
@@ -98,33 +125,103 @@ export default function SignUpPage() {
 			newErrors.email = "Please enter a valid email";
 		}
 
-		if (!formData.phone.trim()) {
-			newErrors.phone = "Phone number is required";
-		} else if (!/^[\d\s+()-]{10,}$/.test(formData.phone)) {
-			newErrors.phone = "Please enter a valid phone number";
-		}
+		if (!forOtp) {
+			if (!formData.phone.trim()) {
+				newErrors.phone = "Phone number is required";
+			} else if (!/^[\d\s+()-]{10,}$/.test(formData.phone)) {
+				newErrors.phone = "Please enter a valid phone number";
+			}
 
-		if (!formData.password) {
-			newErrors.password = "Password is required";
-		} else if (formData.password.length < 8) {
-			newErrors.password = "Password must be at least 8 characters";
-		}
+			if (!formData.password) {
+				newErrors.password = "Password is required";
+			} else if (formData.password.length < 8) {
+				newErrors.password = "Password must be at least 8 characters";
+			}
 
-		if (!formData.confirmPassword) {
-			newErrors.confirmPassword = "Please confirm your password";
-		} else if (formData.password !== formData.confirmPassword) {
-			newErrors.confirmPassword = "Passwords do not match";
+			if (!formData.confirmPassword) {
+				newErrors.confirmPassword = "Please confirm your password";
+			} else if (formData.password !== formData.confirmPassword) {
+				newErrors.confirmPassword = "Passwords do not match";
+			}
 		}
 
 		setErrors(newErrors);
 		return Object.keys(newErrors).length === 0;
 	};
 
-	const handleSubmit = async (e: React.FormEvent) => {
+	// Send OTP
+	const handleSendOtp = async () => {
+		if (!validateForm(true)) return;
+
+		setIsSendingOtp(true);
+		setOtpError(null);
+
+		try {
+			const response = await fetch("/api/auth/send-otp", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					email: formData.email,
+					name: formData.name,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				setOtpError(data.error || "Failed to send verification code");
+				setApiError(data.error || "Failed to send verification code");
+				return;
+			}
+
+			setShowOtpModal(true);
+			setResendCooldown(60);
+			setOtp(["", "", "", "", "", ""]);
+			setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+		} catch {
+			setOtpError("Failed to send verification code. Please try again.");
+			setApiError("Failed to send verification code. Please try again.");
+		} finally {
+			setIsSendingOtp(false);
+		}
+	};
+
+	// Handle OTP input
+	const handleOtpChange = (index: number, value: string) => {
+		if (!/^\d*$/.test(value)) return;
+
+		const newOtp = [...otp];
+		newOtp[index] = value.slice(-1);
+		setOtp(newOtp);
+		setOtpError(null);
+
+		if (value && index < 5) {
+			otpInputRefs.current[index + 1]?.focus();
+		}
+	};
+
+	// Handle OTP paste
+	const handleOtpPaste = (e: React.ClipboardEvent) => {
 		e.preventDefault();
+		const pastedData = e.clipboardData
+			.getData("text")
+			.replace(/\D/g, "")
+			.slice(0, 6);
+		if (pastedData.length === 6) {
+			setOtp(pastedData.split(""));
+			otpInputRefs.current[5]?.focus();
+		}
+	};
 
-		if (!validateForm()) return;
+	// Handle OTP backspace
+	const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+		if (e.key === "Backspace" && !otp[index] && index > 0) {
+			otpInputRefs.current[index - 1]?.focus();
+		}
+	};
 
+	// Complete signup after email verification
+	const completeSignup = async () => {
 		setIsLoading(true);
 		setApiError(null);
 
@@ -141,6 +238,68 @@ export default function SignUpPage() {
 		}
 
 		setIsLoading(false);
+	};
+
+	// Verify OTP
+	const handleVerifyOtp = async () => {
+		const otpString = otp.join("");
+		if (otpString.length !== 6) {
+			setOtpError("Please enter the complete 6-digit code");
+			return;
+		}
+
+		setIsVerifying(true);
+		setOtpError(null);
+
+		try {
+			const response = await fetch("/api/auth/verify-otp", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					email: formData.email,
+					otp: otpString,
+				}),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				setOtpError(data.error || "Invalid verification code");
+				return;
+			}
+
+			setIsEmailVerified(true);
+			setShowOtpModal(false);
+
+			// Automatically complete signup after verification
+			setIsVerifying(false);
+			await completeSignup();
+			return;
+		} catch {
+			setOtpError("Failed to verify code. Please try again.");
+		} finally {
+			setIsVerifying(false);
+		}
+	};
+
+	// Resend OTP
+	const handleResendOtp = async () => {
+		if (resendCooldown > 0) return;
+		await handleSendOtp();
+	};
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+
+		// If email not verified, send OTP (it handles its own validation)
+		if (!isEmailVerified) {
+			await handleSendOtp();
+			return;
+		}
+
+		// If email is verified, validate all fields and complete signup
+		if (!validateForm()) return;
+		await completeSignup();
 	};
 
 	return (
@@ -330,18 +489,31 @@ export default function SignUpPage() {
 							fullWidth
 						/>
 
-						{/* Email */}
-						<Input
-							name="email"
-							type="email"
-							label="Email Address"
-							placeholder="you@company.com"
-							value={formData.email}
-							onChange={handleInputChange}
-							error={errors.email}
-							leftIcon={<Mail className="w-4 h-4" />}
-							fullWidth
-						/>
+						{/* Email with Verification Status */}
+						<div className="relative">
+							<Input
+								name="email"
+								type="email"
+								label="Email Address"
+								placeholder="you@company.com"
+								value={formData.email}
+								onChange={handleInputChange}
+								error={errors.email}
+								leftIcon={<Mail className="w-4 h-4" />}
+								rightIcon={
+									isEmailVerified ? (
+										<CheckCircle className="w-4 h-4 text-success" />
+									) : null
+								}
+								fullWidth
+							/>
+							{isEmailVerified && (
+								<p className="text-xs text-success mt-1 flex items-center gap-1">
+									<CheckCircle className="w-3 h-3" />
+									Email verified
+								</p>
+							)}
+						</div>
 
 						{/* Phone */}
 						<Input
@@ -435,10 +607,10 @@ export default function SignUpPage() {
 							type="submit"
 							variant="primary"
 							size="lg"
-							isLoading={isLoading}
+							isLoading={isLoading || isSendingOtp}
 							className="w-full"
 						>
-							Sign Up
+							{isEmailVerified ? "Sign Up" : "Verify Email & Sign Up"}
 						</Button>
 					</form>
 
@@ -454,6 +626,118 @@ export default function SignUpPage() {
 					</p>
 				</div>
 			</div>
+
+			{/* OTP Verification Modal */}
+			<Modal
+				isOpen={showOtpModal}
+				onClose={() => setShowOtpModal(false)}
+				size="sm"
+			>
+				<div className="p-6">
+					{/* Header */}
+					<div className="text-center mb-6">
+						<div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+							<Shield className="w-8 h-8 text-primary" />
+						</div>
+						<h2 className="text-xl font-semibold text-text-primary mb-2">
+							Verify Your Email
+						</h2>
+						<p className="text-sm text-text-muted">
+							We&apos;ve sent a 6-digit verification code to
+						</p>
+						<p className="text-sm font-medium text-text-primary mt-1">
+							{formData.email}
+						</p>
+					</div>
+
+					{/* OTP Input */}
+					<div className="flex justify-center gap-2 mb-4">
+						{otp.map((digit, index) => (
+							<input
+								key={index}
+								ref={(el) => {
+									otpInputRefs.current[index] = el;
+								}}
+								type="text"
+								inputMode="numeric"
+								maxLength={1}
+								value={digit}
+								onChange={(e) => handleOtpChange(index, e.target.value)}
+								onKeyDown={(e) => handleOtpKeyDown(index, e)}
+								onPaste={index === 0 ? handleOtpPaste : undefined}
+								className={cn(
+									"w-12 h-14 text-center text-2xl font-bold rounded-lg",
+									"bg-surface border-2 transition-all duration-200",
+									"focus:outline-none focus:ring-2 focus:ring-primary/50",
+									otpError
+										? "border-error text-error"
+										: digit
+										? "border-primary text-text-primary"
+										: "border-border text-text-primary"
+								)}
+							/>
+						))}
+					</div>
+
+					{/* Error */}
+					{otpError && (
+						<div className="flex items-center justify-center gap-2 mb-4 text-error text-sm">
+							<AlertCircle className="w-4 h-4" />
+							<span>{otpError}</span>
+						</div>
+					)}
+
+					{/* Verify Button */}
+					<Button
+						type="button"
+						variant="primary"
+						size="lg"
+						isLoading={isVerifying}
+						onClick={handleVerifyOtp}
+						className="w-full mb-4"
+					>
+						Verify Email
+					</Button>
+
+					{/* Resend */}
+					<div className="text-center">
+						<p className="text-sm text-text-muted mb-2">
+							Didn&apos;t receive the code?
+						</p>
+						{resendCooldown > 0 ? (
+							<p className="text-sm text-text-muted">
+								Resend in{" "}
+								<span className="font-medium text-primary">
+									{resendCooldown}s
+								</span>
+							</p>
+						) : (
+							<button
+								type="button"
+								onClick={handleResendOtp}
+								disabled={isSendingOtp}
+								className="text-sm text-primary font-medium hover:text-primary-hover transition-colors flex items-center justify-center gap-1 mx-auto"
+							>
+								<RefreshCw
+									className={cn("w-4 h-4", isSendingOtp && "animate-spin")}
+								/>
+								Resend Code
+							</button>
+						)}
+					</div>
+
+					{/* Change Email */}
+					<div className="mt-4 pt-4 border-t border-border text-center">
+						<button
+							type="button"
+							onClick={() => setShowOtpModal(false)}
+							className="text-sm text-text-muted hover:text-text-primary transition-colors"
+						>
+							Use a different email
+						</button>
+					</div>
+				</div>
+			</Modal>
 		</div>
 	);
 }
