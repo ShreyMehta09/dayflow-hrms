@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
 	Card,
 	CardHeader,
@@ -54,7 +55,8 @@ interface TodayAttendance {
 const getQuickActions = (
 	isCheckedIn: boolean,
 	isCheckedOut: boolean,
-	onClockAction: () => void
+	onClockAction: () => void,
+	router: ReturnType<typeof useRouter>
 ) => [
 	{
 		label: isCheckedOut
@@ -75,27 +77,28 @@ const getQuickActions = (
 		label: "Request Leave",
 		icon: <Calendar className="w-5 h-5" />,
 		variant: "outline" as const,
-		onClick: () => {},
+		onClick: () => router.push("/time-off"),
 		disabled: false,
 	},
 	{
-		label: "Log Expense",
-		icon: <DollarSign className="w-5 h-5" />,
+		label: "My Attendance",
+		icon: <Clock className="w-5 h-5" />,
 		variant: "outline" as const,
-		onClick: () => {},
+		onClick: () => router.push("/attendance"),
 		disabled: false,
 	},
 	{
-		label: "View Payslip",
+		label: "My Profile",
 		icon: <Briefcase className="w-5 h-5" />,
 		variant: "outline" as const,
-		onClick: () => {},
+		onClick: () => router.push("/profile"),
 		disabled: false,
 	},
 ];
 
 export default function DashboardPage() {
 	const { user, role } = useAuth();
+	const router = useRouter();
 	const prefersReducedMotion = useReducedMotion();
 	const announce = useAriaAnnounce();
 
@@ -194,7 +197,8 @@ export default function DashboardPage() {
 	const quickActions = getQuickActions(
 		isCheckedIn,
 		isCheckedOut,
-		handleClockAction
+		handleClockAction,
+		router
 	);
 
 	// Build dynamic stats from API data

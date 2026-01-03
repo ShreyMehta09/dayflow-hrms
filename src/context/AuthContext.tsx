@@ -265,9 +265,19 @@ export const RoleGuard: React.FC<{
 	children: React.ReactNode;
 	fallback?: React.ReactNode;
 }> = ({ allowedRoles, children, fallback = null }) => {
-	const { hasPermission } = useAuth();
+	const { hasPermission, user } = useAuth();
 
-	if (!hasPermission(allowedRoles)) {
+	const hasAccess = hasPermission(allowedRoles);
+	console.log(
+		"RoleGuard - User role:",
+		user?.role,
+		"Allowed:",
+		allowedRoles,
+		"Has access:",
+		hasAccess
+	);
+
+	if (!hasAccess) {
 		return <>{fallback}</>;
 	}
 

@@ -6,3 +6,6 @@ export type { IAttendance, AttendanceStatus } from "./Attendance";
 
 export { TimeOff, LeaveBalance } from "./TimeOff";
 export type { ITimeOff, ILeaveBalance, LeaveType, LeaveStatus } from "./TimeOff";
+
+export { default as Payroll } from "./Payroll";
+export type { IPayroll, ISalaryComponent, PayrollStatus, PaymentMethod } from "./Payroll";

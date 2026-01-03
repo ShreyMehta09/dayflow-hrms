@@ -102,10 +102,9 @@ const navigation: NavGroupType[] = [
 		title: "Payroll",
 		items: [
 			{
-				label: "Payroll",
+				label: "Payroll Management",
 				href: "/payroll",
 				icon: <DollarSign className="w-5 h-5" />,
-				roles: ["admin", "hr"],
 			},
 			{
 				label: "My Payslips",
@@ -155,6 +154,9 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 	const pathname = usePathname();
 	const { user, logout } = useAuth();
+
+	// Debug: Log user role
+	console.log("Sidebar - Current user:", user?.name, "Role:", user?.role);
 
 	const NavLink: React.FC<{ item: NavItemType }> = ({ item }) => {
 		const isActive =
@@ -223,26 +225,34 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
 				{/* Main Navigation */}
 				<nav className="flex-1 overflow-y-auto py-4 px-3">
-					{navigation.map((group) => (
-						<div key={group.title} className="mb-6">
-							<h3 className="px-3 mb-2 text-2xs font-semibold text-text-muted uppercase tracking-wider">
-								{group.title}
-							</h3>
-							<ul className="space-y-1">
-								{group.items.map((item) => (
-									<li key={item.href}>
-										{item.roles ? (
-											<RoleGuard allowedRoles={item.roles}>
+					{navigation.map((group) => {
+						return (
+							<div key={group.title} className="mb-6">
+								<h3 className="px-3 mb-2 text-2xs font-semibold text-text-muted uppercase tracking-wider">
+									{group.title}
+								</h3>
+								<ul className="space-y-1">
+									{group.items.map((item) => {
+										// If item has role restriction, wrap the whole li in RoleGuard
+										if (item.roles) {
+											return (
+												<RoleGuard key={item.href} allowedRoles={item.roles}>
+													<li>
+														<NavLink item={item} />
+													</li>
+												</RoleGuard>
+											);
+										}
+										return (
+											<li key={item.href}>
 												<NavLink item={item} />
-											</RoleGuard>
-										) : (
-											<NavLink item={item} />
-										)}
-									</li>
-								))}
-							</ul>
-						</div>
-					))}
+											</li>
+										);
+									})}
+								</ul>
+							</div>
+						);
+					})}
 				</nav>
 
 				{/* Bottom Navigation */}
