@@ -121,20 +121,21 @@ const employees = [
 	},
 ];
 
-// Status indicator component
+// Status indicator component (positioned at top-right corner)
 const StatusIndicator = ({ status }: { status: EmployeeStatus }) => {
 	if (status === "on_leave") {
 		return (
-			<div className="absolute top-3 right-3 p-1.5 bg-secondary/20 rounded-full">
-				<Plane className="w-3.5 h-3.5 text-secondary" />
+			<div className="absolute top-2.5 right-2.5 p-1.5 bg-blue-500/20 rounded-full backdrop-blur-sm border border-blue-500/30">
+				<Plane className="w-3.5 h-3.5 text-blue-500" />
 			</div>
 		);
 	}
 
+	// Green dot for Present, Yellow dot for Absent
 	return (
 		<div
-			className={`absolute top-3 right-3 w-3 h-3 rounded-full border-2 border-card ${
-				status === "present" ? "bg-success" : "bg-warning"
+			className={`absolute top-2.5 right-2.5 w-3 h-3 rounded-full border-2 border-white shadow-lg ${
+				status === "present" ? "bg-green-500" : "bg-yellow-500"
 			}`}
 		/>
 	);
@@ -150,11 +151,11 @@ const EmployeeCard = ({ employee, onClick }: EmployeeCardProps) => {
 	return (
 		<Card
 			padding="none"
-			className="group cursor-pointer hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5"
+			className="group cursor-pointer hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:scale-[1.02]"
 			onClick={onClick}
 		>
-			<div className="relative p-6 flex flex-col items-center text-center">
-				{/* Status Indicator */}
+			<div className="relative p-5 flex flex-col items-center text-center">
+				{/* Status Indicator - positioned at top-right corner */}
 				<StatusIndicator status={employee.status} />
 
 				{/* Profile Picture */}
@@ -162,16 +163,18 @@ const EmployeeCard = ({ employee, onClick }: EmployeeCardProps) => {
 					src={employee.avatar}
 					name={employee.name}
 					size="xl"
-					className="mb-4 ring-2 ring-border group-hover:ring-primary/50 transition-all"
+					className="mb-3 ring-2 ring-border group-hover:ring-primary/50 transition-all duration-300"
 				/>
 
 				{/* Employee Name */}
-				<h3 className="font-semibold text-text-primary group-hover:text-primary transition-colors">
+				<h3 className="font-semibold text-text-primary group-hover:text-primary transition-colors line-clamp-1">
 					{employee.name}
 				</h3>
 
 				{/* Position */}
-				<p className="text-sm text-text-muted mt-1">{employee.position}</p>
+				<p className="text-sm text-text-muted mt-0.5 line-clamp-1">
+					{employee.position}
+				</p>
 			</div>
 		</Card>
 	);
@@ -227,22 +230,22 @@ const EmployeeProfileModal = ({
 						<p className="text-text-muted mt-1">{employee.position}</p>
 						<div className="flex items-center justify-center sm:justify-start gap-2 mt-3">
 							<span
-								className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
+								className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
 									employee.status === "present"
-										? "bg-success/20 text-success"
+										? "bg-green-500/20 text-green-700 border-green-500/30"
 										: employee.status === "absent"
-										? "bg-warning/20 text-warning"
-										: "bg-secondary/20 text-secondary"
+										? "bg-yellow-500/20 text-yellow-700 border-yellow-500/30"
+										: "bg-blue-500/20 text-blue-700 border-blue-500/30"
 								}`}
 							>
 								{employee.status === "on_leave" && (
 									<Plane className="w-3 h-3" />
 								)}
 								{employee.status === "present" && (
-									<span className="w-2 h-2 bg-success rounded-full" />
+									<span className="w-2 h-2 bg-green-500 rounded-full" />
 								)}
 								{employee.status === "absent" && (
-									<span className="w-2 h-2 bg-warning rounded-full" />
+									<span className="w-2 h-2 bg-yellow-500 rounded-full" />
 								)}
 								{employee.status === "present"
 									? "Present"
@@ -394,23 +397,25 @@ export default function EmployeesPage() {
 			</div>
 
 			{/* Status Legend */}
-			<div className="flex flex-wrap items-center gap-6 text-sm">
+			<div className="flex flex-wrap items-center gap-6 px-1 py-2 text-sm">
 				<div className="flex items-center gap-2">
-					<span className="w-3 h-3 bg-success rounded-full" />
-					<span className="text-text-muted">Present</span>
+					<span className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow" />
+					<span className="text-text-muted font-medium">Present</span>
 				</div>
 				<div className="flex items-center gap-2">
-					<span className="w-3 h-3 bg-warning rounded-full" />
-					<span className="text-text-muted">Absent</span>
+					<span className="w-3 h-3 bg-yellow-500 rounded-full border-2 border-white shadow" />
+					<span className="text-text-muted font-medium">Absent</span>
 				</div>
 				<div className="flex items-center gap-2">
-					<Plane className="w-3.5 h-3.5 text-secondary" />
-					<span className="text-text-muted">On Leave</span>
+					<div className="p-1 bg-blue-500/20 rounded-full border border-blue-500/30">
+						<Plane className="w-3 h-3 text-blue-500" />
+					</div>
+					<span className="text-text-muted font-medium">On Leave</span>
 				</div>
 			</div>
 
 			{/* Employee Grid */}
-			<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+			<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
 				{filteredEmployees.map((employee) => (
 					<EmployeeCard
 						key={employee.id}
